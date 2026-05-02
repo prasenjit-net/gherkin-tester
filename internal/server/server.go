@@ -137,9 +137,10 @@ func (h *spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	indexReq := r.Clone(r.Context())
-	indexReq.URL.Path = "/index.html"
-	h.fileServer.ServeHTTP(w, indexReq)
+	// Serve index.html directly — do NOT route through FileServer with path
+	// "/index.html", because net/http.FileServer unconditionally redirects
+	// requests ending in /index.html to "./" to avoid duplicate content.
+	http.ServeFileFS(w, r, h.fsys, "index.html")
 }
 
 func fileExists(fsys fs.FS, name string) bool {
