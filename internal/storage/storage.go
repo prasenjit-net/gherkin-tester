@@ -411,6 +411,37 @@ results[i], results[j] = results[j], results[i]
 return results, nil
 }
 
+// ListAllExecutions returns every execution in data/executions/, sorted by StartedAt descending.
+func (s *Storage) ListAllExecutions() ([]TestResult, error) {
+	entries, err := os.ReadDir(s.executionsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read executions dir: %w", err)
+	}
+	var results []TestResult
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		result, err := s.GetExecution(e.Name())
+		if err != nil {
+			s.logger.Error("failed to load execution", "id", e.Name(), "error", err)
+			continue
+		}
+		results = append(results, *result)
+	}
+	for i := 0; i < len(results)-1; i++ {
+		for j := i + 1; j < len(results); j++ {
+			if results[j].StartedAt.After(results[i].StartedAt) {
+				results[i], results[j] = results[j], results[i]
+			}
+		}
+	}
+	return results, nil
+}
+
 // ─── Migration ────────────────────────────────────────────────────────────────
 
 // migrate moves data from previous layouts to the current one (idempotent).

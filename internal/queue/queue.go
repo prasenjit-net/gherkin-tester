@@ -58,8 +58,48 @@ func New(exec testclient.Executor, st *storage.Storage, log *slog.Logger) *Queue
 		clients: make(map[chan []byte]struct{}),
 		work:    make(chan struct{}, 256),
 	}
+	q.loadHistory()
 	go q.run()
 	return q
+}
+
+// loadHistory pre-populates the queue with completed executions from disk.
+func (q *Queue) loadHistory() {
+	results, err := q.st.ListAllExecutions()
+	if err != nil {
+		q.log.Error("queue: failed to load execution history", "error", err)
+		return
+	}
+	for _, r := range results {
+		s := r.StartedAt
+		e := r.EndedAt
+		var status Status
+		switch r.Status {
+		case "passed":
+			status = StatusPassed
+		case "failed":
+			status = StatusFailed
+		default:
+			status = StatusError
+		}
+		q.items = append(q.items, &Item{
+			ID:        r.ID,
+			TestID:    r.TestID,
+			ProjectID: r.ProjectID,
+			TestName:  r.TestName,
+			Status:    status,
+			QueuedAt:  s,
+			StartedAt: &s,
+			EndedAt:   &e,
+			Duration:  r.Duration,
+			Scenarios: r.Scenarios,
+			Passed:    r.Passed,
+			Failed:    r.Failed,
+			Message:   r.Message,
+			Output:    r.Output,
+		})
+	}
+	q.log.Info("queue: loaded execution history", "count", len(results))
 }
 
 // Enqueue adds a test run to the queue and signals the worker.
