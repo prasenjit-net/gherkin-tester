@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import SectionHeader from '../components/SectionHeader'
-import { projectApi } from '../services/api'
+import { projectApi, queueApi } from '../services/api'
 import type { Test } from '../types'
 
 export default function ProjectFeatureEditorPage() {
@@ -155,10 +155,18 @@ export default function ProjectFeatureEditorPage() {
               {isSaving ? 'Saving…' : 'Save Feature'}
             </button>
             <button
-              onClick={() => navigate(`/projects/${projectID}/features/${test.id}/run`)}
+              onClick={async () => {
+                if (!test || !projectID) return
+                try {
+                  await queueApi.add(test.id, projectID, test.name)
+                  navigate('/queue')
+                } catch (e: unknown) {
+                  alert(e instanceof Error ? e.message : 'Failed to queue test')
+                }
+              }}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
-              Run Test
+              Queue &amp; Run
             </button>
           </div>
         </div>
