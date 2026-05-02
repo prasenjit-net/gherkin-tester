@@ -1,4 +1,4 @@
-import type { ExampleResponse, HealthResponse, MetaResponse } from '../types'
+import type { ExampleResponse, HealthResponse, MetaResponse, Test, TestResult } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
@@ -29,4 +29,24 @@ export const exampleApi = {
 
 export const metaApi = {
   get: async () => handleResponse<MetaResponse>(await fetch(`${API_BASE}/meta`)),
+}
+
+export const testApi = {
+  list: async () => handleResponse<Test[]>(await fetch(`${API_BASE}/tests`)),
+  get: async (testID: string) => handleResponse<Test>(await fetch(`${API_BASE}/tests/${testID}`)),
+  create: async (test: Omit<Test, 'createdAt' | 'updatedAt'>) => 
+    handleResponse<Test>(await fetch(`${API_BASE}/tests`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(test),
+    })),
+  delete: async (testID: string) =>
+    handleResponse<{ message: string }>(await fetch(`${API_BASE}/tests/${testID}`, {
+      method: 'DELETE',
+    })),
+  run: async (testID: string) => handleResponse<TestResult>(await fetch(`${API_BASE}/tests/${testID}/run`, {
+    method: 'POST',
+  })),
+  getResult: async (testID: string) => handleResponse<TestResult>(await fetch(`${API_BASE}/tests/${testID}/results`)),
+  getHistory: async (testID: string) => handleResponse<TestResult[]>(await fetch(`${API_BASE}/tests/${testID}/history`)),
 }

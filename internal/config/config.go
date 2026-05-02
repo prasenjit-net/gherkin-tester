@@ -15,6 +15,13 @@ type Config struct {
 	Server  ServerConfig  `mapstructure:"server" yaml:"server"`
 	Logging LoggingConfig `mapstructure:"logging" yaml:"logging"`
 	UI      UIConfig      `mapstructure:"ui" yaml:"ui"`
+	Tests   TestsConfig   `mapstructure:"tests" yaml:"tests"`
+}
+
+type TestsConfig struct {
+	DataDir      string `mapstructure:"dataDir" yaml:"dataDir"`
+	KarateJAR    string `mapstructure:"karateJar" yaml:"karateJar"`
+	MaxExecutors int    `mapstructure:"maxExecutors" yaml:"maxExecutors"`
 }
 
 type AppConfig struct {
@@ -45,10 +52,10 @@ type UIConfig struct {
 func Default() Config {
 	return Config{
 		App: AppConfig{
-			Name:        "Go App Template",
+			Name:        "Gherkin Tester",
 			Env:         "development",
 			URL:         "http://localhost:8080",
-			Description: "Full-stack starter with an embedded React frontend.",
+			Description: "Karate test execution agent for API testing.",
 		},
 		Server: ServerConfig{
 			Host:            "0.0.0.0",
@@ -64,6 +71,11 @@ func Default() Config {
 		},
 		UI: UIConfig{
 			DevProxyURL: "http://localhost:5173",
+		},
+		Tests: TestsConfig{
+			DataDir:      "./data",
+			KarateJAR:    "",
+			MaxExecutors: 4,
 		},
 	}
 }
@@ -92,6 +104,9 @@ func SetDefaults(v *viper.Viper) {
 	v.SetDefault("logging.level", defaults.Logging.Level)
 	v.SetDefault("logging.format", defaults.Logging.Format)
 	v.SetDefault("ui.devProxyURL", defaults.UI.DevProxyURL)
+	v.SetDefault("tests.dataDir", defaults.Tests.DataDir)
+	v.SetDefault("tests.karateJar", defaults.Tests.KarateJAR)
+	v.SetDefault("tests.maxExecutors", defaults.Tests.MaxExecutors)
 }
 
 func Load(v *viper.Viper) (Config, error) {
@@ -141,10 +156,10 @@ func fileExists(path string) bool {
 }
 
 const DefaultConfigYAML = `app:
-  name: Go App Template
+  name: Gherkin Tester
   env: development
   url: http://localhost:8080
-  description: Full-stack starter with Go at the repo root and an embedded React UI.
+  description: Karate test execution agent for API testing.
 
 server:
   host: 0.0.0.0
@@ -160,13 +175,21 @@ logging:
 
 ui:
   devProxyURL: http://localhost:5173
+
+tests:
+  dataDir: ./data
+  karateJar: ""
+  maxExecutors: 4
 `
 
 const DefaultEnvExample = `APP_ENV=development
-APP_APP_NAME=Go App Template
+APP_APP_NAME=Gherkin Tester
 APP_SERVER_HOST=0.0.0.0
 APP_SERVER_PORT=8080
 APP_LOGGING_LEVEL=debug
 APP_LOGGING_FORMAT=text
 APP_UI_DEV_PROXY_URL=http://localhost:5173
+APP_TESTS_DATA_DIR=./data
+APP_TESTS_KARATE_JAR=
+APP_TESTS_MAX_EXECUTORS=4
 `

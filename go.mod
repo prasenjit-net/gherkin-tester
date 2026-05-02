@@ -1,4 +1,4 @@
-module github.com/your-org/go-app-template
+module github.com/prasenjit-net/gherkin-tester
 
 go 1.23.0
 

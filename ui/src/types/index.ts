@@ -32,3 +32,28 @@ export interface MetaResponse {
     buildDate: string
   }
 }
+
+export interface Test {
+  id: string
+  name: string
+  description: string
+  content: string
+  tags: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TestResult {
+  id: string
+  testId: string
+  status: 'passed' | 'failed' | 'error'
+  duration: number
+  message: string
+  output: string
+  startedAt: string
+  endedAt: string
+  scenarios: number
+  passed: number
+  failed: number
+}
+

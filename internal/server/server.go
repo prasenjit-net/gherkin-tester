@@ -14,9 +14,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/your-org/go-app-template/internal/api"
-	"github.com/your-org/go-app-template/internal/config"
-	"github.com/your-org/go-app-template/internal/version"
+	"github.com/prasenjit-net/gherkin-tester/internal/api"
+	"github.com/prasenjit-net/gherkin-tester/internal/config"
+	"github.com/prasenjit-net/gherkin-tester/internal/storage"
+	"github.com/prasenjit-net/gherkin-tester/internal/testclient"
+	"github.com/prasenjit-net/gherkin-tester/internal/version"
 )
 
 type Options struct {
@@ -29,10 +31,33 @@ type App struct {
 	logger  *slog.Logger
 	build   version.Info
 	options Options
+	storage *storage.Storage
+	executor testclient.Executor
 }
 
 func New(cfg config.Config, logger *slog.Logger, build version.Info, options Options) (*App, error) {
-	return &App{cfg: cfg, logger: logger, build: build, options: options}, nil
+	st, err := storage.New(cfg.Tests.DataDir, logger)
+	if err != nil {
+		return nil, fmt.Errorf("init storage: %w", err)
+	}
+
+	executorFactory := testclient.NewExecutorFactory(testclient.ExecutionConfig{
+		KarateJAR:    cfg.Tests.KarateJAR,
+		MaxExecutors: cfg.Tests.MaxExecutors,
+	})
+	executor, err := executorFactory.GetExecutor()
+	if err != nil {
+		return nil, fmt.Errorf("init executor: %w", err)
+	}
+
+	return &App{
+		cfg:      cfg,
+		logger:   logger,
+		build:    build,
+		options:  options,
+		storage:  st,
+		executor: executor,
+	}, nil
 }
 
 func (a *App) Handler() http.Handler {
@@ -43,7 +68,7 @@ func (a *App) Handler() http.Handler {
 	r.Use(middleware.Heartbeat("/livez"))
 	r.Use(requestLogger(a.logger))
 
-	r.Mount("/api", api.NewRouter(a.cfg, a.logger, a.build))
+	r.Mount("/api", api.NewRouter(a.cfg, a.logger, a.build, a.storage, a.executor))
 
 	if a.options.DevMode && strings.TrimSpace(a.cfg.UI.DevProxyURL) != "" {
 		r.Handle("/*", newDevProxy(a.cfg.UI.DevProxyURL, a.logger))

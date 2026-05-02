@@ -5,13 +5,19 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/your-org/go-app-template/internal/config"
-	"github.com/your-org/go-app-template/internal/version"
+	"github.com/go-chi/chi/v5"
+
+	"github.com/prasenjit-net/gherkin-tester/internal/config"
+	"github.com/prasenjit-net/gherkin-tester/internal/storage"
+	"github.com/prasenjit-net/gherkin-tester/internal/testclient"
+	"github.com/prasenjit-net/gherkin-tester/internal/version"
 )
 
 type Handler struct {
-	config  config.Config
-	version version.Info
+	config    config.Config
+	version   version.Info
+	storage   *storage.Storage
+	executor  testclient.Executor
 }
 
 type healthResponse struct {
@@ -41,8 +47,8 @@ type metaResponse struct {
 	Version     version.Info `json:"version"`
 }
 
-func NewHandler(cfg config.Config, build version.Info) *Handler {
-	return &Handler{config: cfg, version: build}
+func NewHandler(cfg config.Config, build version.Info, st *storage.Storage, exec testclient.Executor) *Handler {
+	return &Handler{config: cfg, version: build, storage: st, executor: exec}
 }
 
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
@@ -80,6 +86,130 @@ func (h *Handler) Meta(w http.ResponseWriter, r *http.Request) {
 		UIProxy:     h.config.UI.DevProxyURL,
 		Version:     h.version,
 	})
+}
+
+// Test Endpoints
+
+func (h *Handler) CreateTest(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID          string   `json:"id"`
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		Content     string   `json:"content"`
+		Tags        []string `json:"tags"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	test := &storage.Test{
+		ID:          req.ID,
+		Name:        req.Name,
+		Description: req.Description,
+		Content:     req.Content,
+		Tags:        req.Tags,
+	}
+
+	if err := h.storage.CreateTest(test); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, test)
+}
+
+func (h *Handler) ListTests(w http.ResponseWriter, r *http.Request) {
+	tests, err := h.storage.ListTests()
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if tests == nil {
+		tests = []storage.Test{}
+	}
+
+	respondJSON(w, http.StatusOK, tests)
+}
+
+func (h *Handler) GetTest(w http.ResponseWriter, r *http.Request) {
+	testID := chi.URLParam(r, "testID")
+	test, err := h.storage.GetTest(testID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "test not found")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, test)
+}
+
+func (h *Handler) DeleteTest(w http.ResponseWriter, r *http.Request) {
+	testID := chi.URLParam(r, "testID")
+	if err := h.storage.DeleteTest(testID); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"message": "test deleted"})
+}
+
+func (h *Handler) RunTest(w http.ResponseWriter, r *http.Request) {
+	testID := chi.URLParam(r, "testID")
+	test, err := h.storage.GetTest(testID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "test not found")
+		return
+	}
+
+	result, err := h.executor.Execute("", test)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if err := h.storage.SaveTestResult(result); err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to save result")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) GetTestResult(w http.ResponseWriter, r *http.Request) {
+	testID := chi.URLParam(r, "testID")
+	results, err := h.storage.ListTestResults(testID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if len(results) == 0 {
+		respondError(w, http.StatusNotFound, "no results found")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, results[0])
+}
+
+func (h *Handler) GetTestHistory(w http.ResponseWriter, r *http.Request) {
+	testID := chi.URLParam(r, "testID")
+	results, err := h.storage.ListTestResults(testID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if results == nil {
+		results = []storage.TestResult{}
+	}
+
+	respondJSON(w, http.StatusOK, results)
+}
+
+func respondError(w http.ResponseWriter, status int, message string) {
+	respondJSON(w, status, map[string]string{"error": message})
 }
 
 func respondJSON(w http.ResponseWriter, status int, payload any) {

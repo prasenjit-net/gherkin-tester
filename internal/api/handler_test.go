@@ -8,12 +8,21 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/your-org/go-app-template/internal/config"
-	"github.com/your-org/go-app-template/internal/version"
+	"github.com/prasenjit-net/gherkin-tester/internal/config"
+	"github.com/prasenjit-net/gherkin-tester/internal/storage"
+	"github.com/prasenjit-net/gherkin-tester/internal/testclient"
+	"github.com/prasenjit-net/gherkin-tester/internal/version"
 )
 
 func TestHealthEndpoint(t *testing.T) {
-	router := NewRouter(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)), version.Current())
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	st, err := storage.New("./data", logger)
+	if err != nil {
+		t.Fatalf("failed to create storage: %v", err)
+	}
+	
+	executor := &testclient.MockExecutor{}
+	router := NewRouter(config.Default(), logger, version.Current(), st, executor)
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	res := httptest.NewRecorder()
 
