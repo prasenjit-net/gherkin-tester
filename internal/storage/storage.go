@@ -36,7 +36,7 @@ func New(dataDir string, logger *slog.Logger) (*Storage, error) {
 
 func (s *Storage) CreateTest(test *Test) error {
 	if test.ID == "" {
-		return fmt.Errorf("test ID is required")
+		test.ID = fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 
 	test.CreatedAt = time.Now()

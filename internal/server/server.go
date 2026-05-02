@@ -44,7 +44,7 @@ func New(cfg config.Config, logger *slog.Logger, build version.Info, options Opt
 	executorFactory := testclient.NewExecutorFactory(testclient.ExecutionConfig{
 		KarateJAR:    cfg.Tests.KarateJAR,
 		MaxExecutors: cfg.Tests.MaxExecutors,
-	})
+	}, logger)
 	executor, err := executorFactory.GetExecutor()
 	if err != nil {
 		return nil, fmt.Errorf("init executor: %w", err)
