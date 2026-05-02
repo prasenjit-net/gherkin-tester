@@ -223,7 +223,7 @@ func (q *Queue) processOne() bool {
 
 	q.log.Info("queue: running test", "id", item.ID, "testID", testID)
 
-	test, fetchErr := q.st.GetTest(testID)
+	test, fetchErr := q.st.GetTest(item.ProjectID, testID)
 	var result *storage.TestResult
 	var execErr error
 	if fetchErr == nil {
@@ -259,6 +259,7 @@ func (q *Queue) processOne() bool {
 	q.mu.Unlock()
 
 	if result != nil {
+		result.ProjectID = item.ProjectID
 		if err := q.st.SaveTestResult(result); err != nil {
 			q.log.Error("queue: failed to save result", "error", err)
 		}

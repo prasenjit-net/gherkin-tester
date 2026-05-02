@@ -24,10 +24,11 @@ type Test struct {
 type TestResult struct {
 	ID        string    `json:"id"`
 	TestID    string    `json:"testId"`
+	ProjectID string    `json:"projectId"`
 	Status    string    `json:"status"` // passed, failed, error
 	Duration  int64     `json:"duration"` // milliseconds
 	Message   string    `json:"message"`
-	Output    string    `json:"output"`
+	Output    string    `json:"output,omitempty"`
 	StartedAt time.Time `json:"startedAt"`
 	EndedAt   time.Time `json:"endedAt"`
 	Scenarios int       `json:"scenarios"`

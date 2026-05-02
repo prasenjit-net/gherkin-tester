@@ -194,8 +194,9 @@ func (h *Handler) ListProjectTests(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) RunProjectTest(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectID")
 	testID := chi.URLParam(r, "testID")
-	test, err := h.storage.GetTest(testID)
+	test, err := h.storage.GetTest(projectID, testID)
 	if err != nil {
 		respondError(w, http.StatusNotFound, "test not found")
 		return
@@ -206,6 +207,7 @@ func (h *Handler) RunProjectTest(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	result.ProjectID = projectID
 
 	if err := h.storage.SaveTestResult(result); err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to save result")
@@ -218,7 +220,7 @@ func (h *Handler) RunProjectTest(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateProjectTest(w http.ResponseWriter, r *http.Request) {
 	testID := chi.URLParam(r, "testID")
 	projectID := chi.URLParam(r, "projectID")
-	test, err := h.storage.GetTest(testID)
+	test, err := h.storage.GetTest(projectID, testID)
 	if err != nil {
 		respondError(w, http.StatusNotFound, "test not found")
 		return
@@ -293,28 +295,42 @@ func (h *Handler) ListTests(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetTest(w http.ResponseWriter, r *http.Request) {
 	testID := chi.URLParam(r, "testID")
-	test, err := h.storage.GetTest(testID)
+	projectID := chi.URLParam(r, "projectID")
+	var test *storage.Test
+	var err error
+	if projectID != "" {
+		test, err = h.storage.GetTest(projectID, testID)
+	} else {
+		test, err = h.storage.FindTest(testID)
+	}
 	if err != nil {
 		respondError(w, http.StatusNotFound, "test not found")
 		return
 	}
-
 	respondJSON(w, http.StatusOK, test)
 }
 
 func (h *Handler) DeleteTest(w http.ResponseWriter, r *http.Request) {
 	testID := chi.URLParam(r, "testID")
-	if err := h.storage.DeleteTest(testID); err != nil {
+	projectID := chi.URLParam(r, "projectID")
+	if projectID == "" {
+		test, err := h.storage.FindTest(testID)
+		if err != nil {
+			respondError(w, http.StatusNotFound, "test not found")
+			return
+		}
+		projectID = test.ProjectID
+	}
+	if err := h.storage.DeleteTest(projectID, testID); err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-
 	respondJSON(w, http.StatusOK, map[string]string{"message": "test deleted"})
 }
 
 func (h *Handler) RunTest(w http.ResponseWriter, r *http.Request) {
 	testID := chi.URLParam(r, "testID")
-	test, err := h.storage.GetTest(testID)
+	test, err := h.storage.FindTest(testID)
 	if err != nil {
 		respondError(w, http.StatusNotFound, "test not found")
 		return
@@ -325,43 +341,51 @@ func (h *Handler) RunTest(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	result.ProjectID = test.ProjectID
 
 	if err := h.storage.SaveTestResult(result); err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to save result")
 		return
 	}
-
 	respondJSON(w, http.StatusOK, result)
 }
 
 func (h *Handler) GetTestResult(w http.ResponseWriter, r *http.Request) {
 	testID := chi.URLParam(r, "testID")
-	results, err := h.storage.ListTestResults(testID)
+	projectID := chi.URLParam(r, "projectID")
+	if projectID == "" {
+		if test, err := h.storage.FindTest(testID); err == nil {
+			projectID = test.ProjectID
+		}
+	}
+	results, err := h.storage.ListTestResults(projectID, testID)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-
 	if len(results) == 0 {
 		respondError(w, http.StatusNotFound, "no results found")
 		return
 	}
-
 	respondJSON(w, http.StatusOK, results[0])
 }
 
 func (h *Handler) GetTestHistory(w http.ResponseWriter, r *http.Request) {
 	testID := chi.URLParam(r, "testID")
-	results, err := h.storage.ListTestResults(testID)
+	projectID := chi.URLParam(r, "projectID")
+	if projectID == "" {
+		if test, err := h.storage.FindTest(testID); err == nil {
+			projectID = test.ProjectID
+		}
+	}
+	results, err := h.storage.ListTestResults(projectID, testID)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-
 	if results == nil {
 		results = []storage.TestResult{}
 	}
-
 	respondJSON(w, http.StatusOK, results)
 }
 
