@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/prasenjit-net/gherkin-tester/internal/config"
+	"github.com/prasenjit-net/gherkin-tester/internal/queue"
 	"github.com/prasenjit-net/gherkin-tester/internal/storage"
 	"github.com/prasenjit-net/gherkin-tester/internal/testclient"
 	"github.com/prasenjit-net/gherkin-tester/internal/version"
@@ -18,6 +19,7 @@ type Handler struct {
 	version  version.Info
 	storage  *storage.Storage
 	executor testclient.Executor
+	queue    *queue.Queue
 }
 
 type healthResponse struct {
@@ -47,9 +49,10 @@ type metaResponse struct {
 	Version     version.Info `json:"version"`
 }
 
-func NewHandler(cfg config.Config, build version.Info, st *storage.Storage, exec testclient.Executor) *Handler {
-	return &Handler{config: cfg, version: build, storage: st, executor: exec}
+func NewHandler(cfg config.Config, build version.Info, st *storage.Storage, exec testclient.Executor, q *queue.Queue) *Handler {
+	return &Handler{config: cfg, version: build, storage: st, executor: exec, queue: q}
 }
+
 
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, healthResponse{
@@ -212,6 +215,36 @@ func (h *Handler) RunProjectTest(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, result)
 }
 
+func (h *Handler) UpdateProjectTest(w http.ResponseWriter, r *http.Request) {
+	testID := chi.URLParam(r, "testID")
+	projectID := chi.URLParam(r, "projectID")
+	test, err := h.storage.GetTest(testID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "test not found")
+		return
+	}
+	var req struct {
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		Content     string   `json:"content"`
+		Tags        []string `json:"tags"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	test.ProjectID = projectID
+	test.Name = req.Name
+	test.Description = req.Description
+	test.Content = req.Content
+	test.Tags = req.Tags
+	if err := h.storage.UpdateTest(test); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, test)
+}
+
 // ─── Test Endpoints (global, for backward compat) ───────────────────────────
 
 func (h *Handler) CreateTest(w http.ResponseWriter, r *http.Request) {
@@ -333,11 +366,54 @@ func (h *Handler) GetTestHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func respondError(w http.ResponseWriter, status int, message string) {
-respondJSON(w, status, map[string]string{"error": message})
+	respondJSON(w, status, map[string]string{"error": message})
 }
 
 func respondJSON(w http.ResponseWriter, status int, payload any) {
-w.Header().Set("Content-Type", "application/json; charset=utf-8")
-w.WriteHeader(status)
-_ = json.NewEncoder(w).Encode(payload)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
 }
+
+// ─── Queue handlers ───────────────────────────────────────────────────────────
+
+func (h *Handler) QueueList(w http.ResponseWriter, r *http.Request) {
+	respondJSON(w, http.StatusOK, h.queue.Items())
+}
+
+func (h *Handler) QueueAdd(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		TestID    string `json:"testId"`
+		ProjectID string `json:"projectId"`
+		TestName  string `json:"testName"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if body.TestID == "" {
+		respondError(w, http.StatusBadRequest, "testId is required")
+		return
+	}
+	item := h.queue.Enqueue(body.TestID, body.ProjectID, body.TestName)
+	respondJSON(w, http.StatusCreated, item)
+}
+
+func (h *Handler) QueueCancel(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if h.queue.Cancel(id) {
+		respondJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
+	} else {
+		respondError(w, http.StatusNotFound, "item not found or already running")
+	}
+}
+
+func (h *Handler) QueueClear(w http.ResponseWriter, r *http.Request) {
+	h.queue.ClearCompleted()
+	respondJSON(w, http.StatusOK, map[string]string{"status": "cleared"})
+}
+
+func (h *Handler) QueueStream(w http.ResponseWriter, r *http.Request) {
+	h.queue.ServeSSE(w, r)
+}
+

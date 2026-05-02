@@ -1,4 +1,4 @@
-import type { ExampleResponse, HealthResponse, MetaResponse, Project, Test, TestResult } from '../types'
+import type { ExampleResponse, HealthResponse, MetaResponse, Project, QueueItem, Test, TestResult } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
@@ -54,6 +54,12 @@ export const projectApi = {
     })),
   getTest: async (projectID: string, testID: string) =>
     handleResponse<Test>(await fetch(`${API_BASE}/projects/${projectID}/tests/${testID}`)),
+  updateTest: async (projectID: string, testID: string, test: Pick<Test, 'name' | 'description' | 'content' | 'tags'>) =>
+    handleResponse<Test>(await fetch(`${API_BASE}/projects/${projectID}/tests/${testID}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(test),
+    })),
   deleteTest: async (projectID: string, testID: string) =>
     handleResponse<{ message: string }>(await fetch(`${API_BASE}/projects/${projectID}/tests/${testID}`, {
       method: 'DELETE',
@@ -64,6 +70,21 @@ export const projectApi = {
     })),
   getTestHistory: async (projectID: string, testID: string) =>
     handleResponse<TestResult[]>(await fetch(`${API_BASE}/projects/${projectID}/tests/${testID}/history`)),
+}
+
+export const queueApi = {
+  list: async () => handleResponse<QueueItem[]>(await fetch(`${API_BASE}/queue`)),
+  add: async (testId: string, projectId: string, testName: string) =>
+    handleResponse<QueueItem>(await fetch(`${API_BASE}/queue`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ testId, projectId, testName }),
+    })),
+  cancel: async (id: string) =>
+    handleResponse<{ status: string }>(await fetch(`${API_BASE}/queue/${id}`, { method: 'DELETE' })),
+  clearCompleted: async () =>
+    handleResponse<{ status: string }>(await fetch(`${API_BASE}/queue/completed`, { method: 'DELETE' })),
+  streamURL: () => `${API_BASE}/queue/stream`,
 }
 
 export const testApi = {

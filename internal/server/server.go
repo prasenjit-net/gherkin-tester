@@ -16,6 +16,7 @@ import (
 
 	"github.com/prasenjit-net/gherkin-tester/internal/api"
 	"github.com/prasenjit-net/gherkin-tester/internal/config"
+	"github.com/prasenjit-net/gherkin-tester/internal/queue"
 	"github.com/prasenjit-net/gherkin-tester/internal/storage"
 	"github.com/prasenjit-net/gherkin-tester/internal/testclient"
 	"github.com/prasenjit-net/gherkin-tester/internal/version"
@@ -27,12 +28,13 @@ type Options struct {
 }
 
 type App struct {
-	cfg     config.Config
-	logger  *slog.Logger
-	build   version.Info
-	options Options
-	storage *storage.Storage
+	cfg      config.Config
+	logger   *slog.Logger
+	build    version.Info
+	options  Options
+	storage  *storage.Storage
 	executor testclient.Executor
+	queue    *queue.Queue
 }
 
 func New(cfg config.Config, logger *slog.Logger, build version.Info, options Options) (*App, error) {
@@ -50,6 +52,8 @@ func New(cfg config.Config, logger *slog.Logger, build version.Info, options Opt
 		return nil, fmt.Errorf("init executor: %w", err)
 	}
 
+	q := queue.New(executor, st, logger)
+
 	return &App{
 		cfg:      cfg,
 		logger:   logger,
@@ -57,6 +61,7 @@ func New(cfg config.Config, logger *slog.Logger, build version.Info, options Opt
 		options:  options,
 		storage:  st,
 		executor: executor,
+		queue:    q,
 	}, nil
 }
 
@@ -68,7 +73,7 @@ func (a *App) Handler() http.Handler {
 	r.Use(middleware.Heartbeat("/livez"))
 	r.Use(requestLogger(a.logger))
 
-	r.Mount("/api", api.NewRouter(a.cfg, a.logger, a.build, a.storage, a.executor))
+	r.Mount("/api", api.NewRouter(a.cfg, a.logger, a.build, a.storage, a.executor, a.queue))
 
 	if a.options.DevMode && strings.TrimSpace(a.cfg.UI.DevProxyURL) != "" {
 		r.Handle("/*", newDevProxy(a.cfg.UI.DevProxyURL, a.logger))

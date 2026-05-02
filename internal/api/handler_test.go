@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/prasenjit-net/gherkin-tester/internal/config"
+	"github.com/prasenjit-net/gherkin-tester/internal/queue"
 	"github.com/prasenjit-net/gherkin-tester/internal/storage"
 	"github.com/prasenjit-net/gherkin-tester/internal/testclient"
 	"github.com/prasenjit-net/gherkin-tester/internal/version"
@@ -22,7 +23,8 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 	
 	executor := &testclient.MockExecutor{}
-	router := NewRouter(config.Default(), logger, version.Current(), st, executor)
+	var q *queue.Queue // nil is OK — health endpoint doesn't use queue
+	router := NewRouter(config.Default(), logger, version.Current(), st, executor, q)
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	res := httptest.NewRecorder()
 

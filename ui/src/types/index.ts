@@ -52,6 +52,22 @@ export interface Test {
   updatedAt: string
 }
 
+export interface QueueItem {
+  id: string
+  testId: string
+  projectId: string
+  testName: string
+  status: 'queued' | 'running' | 'passed' | 'failed' | 'error'
+  queuedAt: string
+  startedAt?: string
+  endedAt?: string
+  duration?: number
+  scenarios?: number
+  passed?: number
+  failed?: number
+  message?: string
+}
+
 export interface TestResult {
   id: string
   testId: string

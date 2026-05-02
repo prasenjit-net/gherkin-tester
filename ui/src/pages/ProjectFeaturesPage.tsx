@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import SectionHeader from '../components/SectionHeader'
-import { projectApi } from '../services/api'
+import { projectApi, queueApi } from '../services/api'
 import type { Project, Test } from '../types'
 
 export default function ProjectFeaturesPage() {
@@ -192,10 +192,17 @@ export default function ProjectFeaturesPage() {
                     Edit
                   </button>
                   <button
-                    onClick={() => navigate(`/projects/${projectID}/features/${test.id}/run`)}
+                    onClick={async () => {
+                      try {
+                        await queueApi.add(test.id, projectID!, test.name)
+                        navigate('/queue')
+                      } catch (e: unknown) {
+                        alert(e instanceof Error ? e.message : 'Failed to queue test')
+                      }
+                    }}
                     className="px-3 py-1 text-sm bg-green-100 text-green-700 rounded hover:bg-green-200"
                   >
-                    Run
+                    Queue
                   </button>
                   <button
                     onClick={() => handleDelete(test.id)}
