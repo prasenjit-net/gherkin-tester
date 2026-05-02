@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 
@@ -122,7 +123,7 @@ func (q *Queue) Enqueue(testID, projectID, testName string) *Item {
 	return item
 }
 
-// Items returns a snapshot of all current queue items.
+// Items returns a snapshot of all queue items sorted by QueuedAt descending.
 func (q *Queue) Items() []Item {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -130,6 +131,9 @@ func (q *Queue) Items() []Item {
 	for i, it := range q.items {
 		out[i] = *it
 	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].QueuedAt.After(out[j].QueuedAt)
+	})
 	return out
 }
 
@@ -190,6 +194,9 @@ func (q *Queue) ServeSSE(w http.ResponseWriter, r *http.Request) {
 		snapshot[i] = *it
 	}
 	q.mu.Unlock()
+	sort.Slice(snapshot, func(i, j int) bool {
+		return snapshot[i].QueuedAt.After(snapshot[j].QueuedAt)
+	})
 
 	// Send initial snapshot
 	if data, err := json.Marshal(map[string]any{"type": "snapshot", "items": snapshot}); err == nil {
