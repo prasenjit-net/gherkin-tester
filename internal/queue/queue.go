@@ -140,9 +140,14 @@ func (q *Queue) ServeSSE(w http.ResponseWriter, r *http.Request) {
 
 	ch := make(chan []byte, 64)
 
+	// Register client and take snapshot atomically, without calling Items()
+	// (which would deadlock by trying to re-acquire the same mutex).
 	q.mu.Lock()
 	q.clients[ch] = struct{}{}
-	snapshot := q.Items()
+	snapshot := make([]Item, len(q.items))
+	for i, it := range q.items {
+		snapshot[i] = *it
+	}
 	q.mu.Unlock()
 
 	// Send initial snapshot
