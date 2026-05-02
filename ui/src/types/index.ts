@@ -66,6 +66,7 @@ export interface QueueItem {
   passed?: number
   failed?: number
   message?: string
+  output?: string
 }
 
 export interface TestResult {

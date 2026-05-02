@@ -119,6 +119,18 @@ function ItemRow({ item, tick }: { item: QueueItem; tick: number }) {
               {item.message}
             </div>
           )}
+
+          {/* Raw output */}
+          {item.output && (
+            <details open>
+              <summary className="cursor-pointer text-xs font-semibold text-slate-500 uppercase tracking-wide select-none mb-2">
+                Execution Output
+              </summary>
+              <pre className="bg-slate-900 text-green-300 text-xs p-4 rounded-lg overflow-auto max-h-96 whitespace-pre-wrap break-words">
+                {item.output}
+              </pre>
+            </details>
+          )}
         </div>
       )}
     </div>

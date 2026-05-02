@@ -36,6 +36,7 @@ type Item struct {
 	Passed    int        `json:"passed,omitempty"`
 	Failed    int        `json:"failed,omitempty"`
 	Message   string     `json:"message,omitempty"`
+	Output    string     `json:"output,omitempty"`
 }
 
 type Queue struct {
@@ -245,6 +246,7 @@ func (q *Queue) processOne() bool {
 		item.Passed = result.Passed
 		item.Failed = result.Failed
 		item.Message = result.Message
+		item.Output = result.Output
 		switch result.Status {
 		case "passed":
 			item.Status = StatusPassed
