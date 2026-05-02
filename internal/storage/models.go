@@ -25,6 +25,7 @@ type TestResult struct {
 	ID        string    `json:"id"`
 	TestID    string    `json:"testId"`
 	ProjectID string    `json:"projectId"`
+	TestName  string    `json:"testName,omitempty"`
 	Status    string    `json:"status"` // passed, failed, error
 	Duration  int64     `json:"duration"` // milliseconds
 	Message   string    `json:"message"`

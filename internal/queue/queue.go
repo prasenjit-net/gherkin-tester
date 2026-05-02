@@ -260,6 +260,7 @@ func (q *Queue) processOne() bool {
 
 	if result != nil {
 		result.ProjectID = item.ProjectID
+		result.TestName = item.TestName
 		if err := q.st.SaveTestResult(result); err != nil {
 			q.log.Error("queue: failed to save result", "error", err)
 		}
