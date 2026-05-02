@@ -11,28 +11,95 @@ import (
 )
 
 type Storage struct {
-	testDir    string
-	resultsDir string
-	logger     *slog.Logger
+	testDir     string
+	resultsDir  string
+	projectsDir string
+	logger      *slog.Logger
 }
 
 func New(dataDir string, logger *slog.Logger) (*Storage, error) {
 	testDir := filepath.Join(dataDir, "tests")
 	resultsDir := filepath.Join(dataDir, "results")
+	projectsDir := filepath.Join(dataDir, "projects")
 
-	if err := os.MkdirAll(testDir, 0o755); err != nil {
-		return nil, fmt.Errorf("create tests dir: %w", err)
-	}
-	if err := os.MkdirAll(resultsDir, 0o755); err != nil {
-		return nil, fmt.Errorf("create results dir: %w", err)
+	for _, dir := range []string{testDir, resultsDir, projectsDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, fmt.Errorf("create dir %s: %w", dir, err)
+		}
 	}
 
 	return &Storage{
-		testDir:    testDir,
-		resultsDir: resultsDir,
-		logger:     logger,
+		testDir:     testDir,
+		resultsDir:  resultsDir,
+		projectsDir: projectsDir,
+		logger:      logger,
 	}, nil
 }
+
+// ─── Projects ───────────────────────────────────────────────────────────────
+
+func (s *Storage) CreateProject(project *Project) error {
+	if project.ID == "" {
+		project.ID = fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	project.CreatedAt = time.Now()
+	project.UpdatedAt = time.Now()
+
+	data, err := json.MarshalIndent(project, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal project: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(s.projectsDir, project.ID+".json"), data, 0o644); err != nil {
+		return fmt.Errorf("write project: %w", err)
+	}
+
+	s.logger.Info("project created", "id", project.ID, "name", project.Name)
+	return nil
+}
+
+func (s *Storage) GetProject(projectID string) (*Project, error) {
+	data, err := os.ReadFile(filepath.Join(s.projectsDir, projectID+".json"))
+	if err != nil {
+		return nil, fmt.Errorf("read project: %w", err)
+	}
+	var p Project
+	if err := json.Unmarshal(data, &p); err != nil {
+		return nil, fmt.Errorf("unmarshal project: %w", err)
+	}
+	return &p, nil
+}
+
+func (s *Storage) ListProjects() ([]Project, error) {
+	entries, err := os.ReadDir(s.projectsDir)
+	if err != nil {
+		return nil, fmt.Errorf("read projects dir: %w", err)
+	}
+	var projects []Project
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		id := strings.TrimSuffix(e.Name(), ".json")
+		p, err := s.GetProject(id)
+		if err != nil {
+			s.logger.Error("failed to load project", "id", id, "error", err)
+			continue
+		}
+		projects = append(projects, *p)
+	}
+	return projects, nil
+}
+
+func (s *Storage) DeleteProject(projectID string) error {
+	path := filepath.Join(s.projectsDir, projectID+".json")
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("delete project: %w", err)
+	}
+	s.logger.Info("project deleted", "id", projectID)
+	return nil
+}
+
+// ─── Tests ───────────────────────────────────────────────────────────────────
 
 func (s *Storage) CreateTest(test *Test) error {
 	if test.ID == "" {
@@ -42,31 +109,29 @@ func (s *Storage) CreateTest(test *Test) error {
 	test.CreatedAt = time.Now()
 	test.UpdatedAt = time.Now()
 
-	// Save feature file
 	featurePath := filepath.Join(s.testDir, test.ID+".feature")
 	if err := os.WriteFile(featurePath, []byte(test.Content), 0o644); err != nil {
 		return fmt.Errorf("write feature file: %w", err)
 	}
 
-	// Save metadata
 	metadata := map[string]interface{}{
 		"id":          test.ID,
+		"projectId":   test.ProjectID,
 		"name":        test.Name,
 		"description": test.Description,
 		"tags":        test.Tags,
 		"createdAt":   test.CreatedAt,
 		"updatedAt":   test.UpdatedAt,
 	}
-	metaPath := filepath.Join(s.testDir, test.ID+".json")
 	metaData, err := json.MarshalIndent(metadata, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal metadata: %w", err)
 	}
-	if err := os.WriteFile(metaPath, metaData, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(s.testDir, test.ID+".json"), metaData, 0o644); err != nil {
 		return fmt.Errorf("write metadata: %w", err)
 	}
 
-	s.logger.Info("test created", "id", test.ID, "name", test.Name)
+	s.logger.Info("test created", "id", test.ID, "name", test.Name, "projectId", test.ProjectID)
 	return nil
 }
 
@@ -90,6 +155,7 @@ func (s *Storage) GetTest(testID string) (*Test, error) {
 
 	test := &Test{
 		ID:          testID,
+		ProjectID:   getString(metadata, "projectId"),
 		Name:        getString(metadata, "name"),
 		Description: getString(metadata, "description"),
 		Content:     string(content),
@@ -102,6 +168,14 @@ func (s *Storage) GetTest(testID string) (*Test, error) {
 }
 
 func (s *Storage) ListTests() ([]Test, error) {
+	return s.listTestsFiltered("")
+}
+
+func (s *Storage) ListTestsByProject(projectID string) ([]Test, error) {
+	return s.listTestsFiltered(projectID)
+}
+
+func (s *Storage) listTestsFiltered(projectID string) ([]Test, error) {
 	entries, err := os.ReadDir(s.testDir)
 	if err != nil {
 		return nil, fmt.Errorf("read tests dir: %w", err)
@@ -109,18 +183,19 @@ func (s *Storage) ListTests() ([]Test, error) {
 
 	var tests []Test
 	for _, entry := range entries {
-		if entry.IsDir() {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 			continue
 		}
-		if strings.HasSuffix(entry.Name(), ".json") {
-			testID := strings.TrimSuffix(entry.Name(), ".json")
-			test, err := s.GetTest(testID)
-			if err != nil {
-				s.logger.Error("failed to load test", "id", testID, "error", err)
-				continue
-			}
-			tests = append(tests, *test)
+		testID := strings.TrimSuffix(entry.Name(), ".json")
+		test, err := s.GetTest(testID)
+		if err != nil {
+			s.logger.Error("failed to load test", "id", testID, "error", err)
+			continue
 		}
+		if projectID != "" && test.ProjectID != projectID {
+			continue
+		}
+		tests = append(tests, *test)
 	}
 
 	return tests, nil
@@ -145,6 +220,8 @@ func (s *Storage) UpdateTest(test *Test) error {
 	test.UpdatedAt = time.Now()
 	return s.CreateTest(test)
 }
+
+// ─── Results ─────────────────────────────────────────────────────────────────
 
 func (s *Storage) SaveTestResult(result *TestResult) error {
 	if result.ID == "" {
@@ -221,7 +298,8 @@ func (s *Storage) ListTestResults(testID string) ([]TestResult, error) {
 	return results, nil
 }
 
-// Helper functions
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 func getString(m map[string]interface{}, key string) string {
 	if v, ok := m[key]; ok {
 		if s, ok := v.(string); ok {
@@ -257,3 +335,5 @@ func getTime(m map[string]interface{}, key string) time.Time {
 	}
 	return time.Time{}
 }
+
+

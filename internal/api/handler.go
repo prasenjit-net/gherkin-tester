@@ -14,10 +14,10 @@ import (
 )
 
 type Handler struct {
-	config    config.Config
-	version   version.Info
-	storage   *storage.Storage
-	executor  testclient.Executor
+	config   config.Config
+	version  version.Info
+	storage  *storage.Storage
+	executor testclient.Executor
 }
 
 type healthResponse struct {
@@ -88,7 +88,131 @@ func (h *Handler) Meta(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Test Endpoints
+// ─── Project Endpoints ───────────────────────────────────────────────────────
+
+func (h *Handler) CreateProject(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID          string `json:"id"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	project := &storage.Project{
+		ID:          req.ID,
+		Name:        req.Name,
+		Description: req.Description,
+	}
+
+	if err := h.storage.CreateProject(project); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, project)
+}
+
+func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request) {
+	projects, err := h.storage.ListProjects()
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if projects == nil {
+		projects = []storage.Project{}
+	}
+	respondJSON(w, http.StatusOK, projects)
+}
+
+func (h *Handler) GetProject(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectID")
+	project, err := h.storage.GetProject(projectID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "project not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, project)
+}
+
+func (h *Handler) DeleteProject(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectID")
+	if err := h.storage.DeleteProject(projectID); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"message": "project deleted"})
+}
+
+// ─── Test Endpoints (project-scoped) ────────────────────────────────────────
+
+func (h *Handler) CreateProjectTest(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectID")
+	var req struct {
+		ID          string   `json:"id"`
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		Content     string   `json:"content"`
+		Tags        []string `json:"tags"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	test := &storage.Test{
+		ID:          req.ID,
+		ProjectID:   projectID,
+		Name:        req.Name,
+		Description: req.Description,
+		Content:     req.Content,
+		Tags:        req.Tags,
+	}
+	if err := h.storage.CreateTest(test); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusCreated, test)
+}
+
+func (h *Handler) ListProjectTests(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectID")
+	tests, err := h.storage.ListTestsByProject(projectID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if tests == nil {
+		tests = []storage.Test{}
+	}
+	respondJSON(w, http.StatusOK, tests)
+}
+
+func (h *Handler) RunProjectTest(w http.ResponseWriter, r *http.Request) {
+	testID := chi.URLParam(r, "testID")
+	test, err := h.storage.GetTest(testID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "test not found")
+		return
+	}
+
+	result, err := h.executor.Execute("", test)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if err := h.storage.SaveTestResult(result); err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to save result")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, result)
+}
+
+// ─── Test Endpoints (global, for backward compat) ───────────────────────────
 
 func (h *Handler) CreateTest(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -209,11 +333,11 @@ func (h *Handler) GetTestHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func respondError(w http.ResponseWriter, status int, message string) {
-	respondJSON(w, status, map[string]string{"error": message})
+respondJSON(w, status, map[string]string{"error": message})
 }
 
 func respondJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
+w.Header().Set("Content-Type", "application/json; charset=utf-8")
+w.WriteHeader(status)
+_ = json.NewEncoder(w).Encode(payload)
 }

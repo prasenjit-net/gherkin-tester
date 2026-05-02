@@ -33,8 +33,17 @@ export interface MetaResponse {
   }
 }
 
+export interface Project {
+  id: string
+  name: string
+  description: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Test {
   id: string
+  projectId: string
   name: string
   description: string
   content: string

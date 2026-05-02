@@ -41,6 +41,7 @@ export default function TestEditorPage() {
         description: test.description,
         content: test.content,
         tags: test.tags,
+        projectId: test.projectId,
       })
       setError(null)
       alert('Test saved successfully!')

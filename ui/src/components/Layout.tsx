@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { BookOpen, LayoutDashboard, Menu, Moon, Monitor, Settings, Sparkles, Sun, X, TestTube } from 'lucide-react'
+import { BookOpen, LayoutDashboard, Menu, Moon, Monitor, Settings, Sparkles, Sun, X, TestTube, FolderKanban } from 'lucide-react'
 import clsx from 'clsx'
 import { LogoFull } from './Logo'
 import { metaApi } from '../services/api'
@@ -12,7 +12,8 @@ const themeStorageKey = 'go-app-template-theme'
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/tests', label: 'Tests', icon: TestTube },
+  { to: '/projects', label: 'Projects', icon: FolderKanban },
+  { to: '/tests', label: 'Tests (Legacy)', icon: TestTube },
   { to: '/examples', label: 'Examples', icon: Sparkles },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]

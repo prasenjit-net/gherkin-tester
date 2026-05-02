@@ -23,7 +23,22 @@ func NewRouter(cfg config.Config, logger *slog.Logger, build version.Info, st *s
 	r.Get("/example", h.Example)
 	r.Get("/meta", h.Meta)
 
-	// Test endpoints
+	// Project routes
+	r.Post("/projects", h.CreateProject)
+	r.Get("/projects", h.ListProjects)
+	r.Get("/projects/{projectID}", h.GetProject)
+	r.Delete("/projects/{projectID}", h.DeleteProject)
+
+	// Project-scoped test routes
+	r.Post("/projects/{projectID}/tests", h.CreateProjectTest)
+	r.Get("/projects/{projectID}/tests", h.ListProjectTests)
+	r.Get("/projects/{projectID}/tests/{testID}", h.GetTest)
+	r.Delete("/projects/{projectID}/tests/{testID}", h.DeleteTest)
+	r.Post("/projects/{projectID}/tests/{testID}/run", h.RunProjectTest)
+	r.Get("/projects/{projectID}/tests/{testID}/results", h.GetTestResult)
+	r.Get("/projects/{projectID}/tests/{testID}/history", h.GetTestHistory)
+
+	// Legacy flat test routes (backward compat)
 	r.Post("/tests", h.CreateTest)
 	r.Get("/tests", h.ListTests)
 	r.Get("/tests/{testID}", h.GetTest)
@@ -36,7 +51,7 @@ func NewRouter(cfg config.Config, logger *slog.Logger, build version.Info, st *s
 		respondJSON(w, http.StatusOK, map[string]any{
 			"service": cfg.App.Name,
 			"message": "API ready",
-			"routes":  []string{"/api/health", "/api/tests", "/api/meta"},
+			"routes":  []string{"/api/health", "/api/projects", "/api/tests", "/api/meta"},
 		})
 	})
 

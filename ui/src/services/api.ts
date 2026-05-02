@@ -1,4 +1,4 @@
-import type { ExampleResponse, HealthResponse, MetaResponse, Test, TestResult } from '../types'
+import type { ExampleResponse, HealthResponse, MetaResponse, Project, Test, TestResult } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
@@ -31,10 +31,45 @@ export const metaApi = {
   get: async () => handleResponse<MetaResponse>(await fetch(`${API_BASE}/meta`)),
 }
 
+export const projectApi = {
+  list: async () => handleResponse<Project[]>(await fetch(`${API_BASE}/projects`)),
+  get: async (projectID: string) => handleResponse<Project>(await fetch(`${API_BASE}/projects/${projectID}`)),
+  create: async (project: Omit<Project, 'createdAt' | 'updatedAt'>) =>
+    handleResponse<Project>(await fetch(`${API_BASE}/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(project),
+    })),
+  delete: async (projectID: string) =>
+    handleResponse<{ message: string }>(await fetch(`${API_BASE}/projects/${projectID}`, {
+      method: 'DELETE',
+    })),
+  listTests: async (projectID: string) =>
+    handleResponse<Test[]>(await fetch(`${API_BASE}/projects/${projectID}/tests`)),
+  createTest: async (projectID: string, test: Omit<Test, 'projectId' | 'createdAt' | 'updatedAt'>) =>
+    handleResponse<Test>(await fetch(`${API_BASE}/projects/${projectID}/tests`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(test),
+    })),
+  getTest: async (projectID: string, testID: string) =>
+    handleResponse<Test>(await fetch(`${API_BASE}/projects/${projectID}/tests/${testID}`)),
+  deleteTest: async (projectID: string, testID: string) =>
+    handleResponse<{ message: string }>(await fetch(`${API_BASE}/projects/${projectID}/tests/${testID}`, {
+      method: 'DELETE',
+    })),
+  runTest: async (projectID: string, testID: string) =>
+    handleResponse<TestResult>(await fetch(`${API_BASE}/projects/${projectID}/tests/${testID}/run`, {
+      method: 'POST',
+    })),
+  getTestHistory: async (projectID: string, testID: string) =>
+    handleResponse<TestResult[]>(await fetch(`${API_BASE}/projects/${projectID}/tests/${testID}/history`)),
+}
+
 export const testApi = {
   list: async () => handleResponse<Test[]>(await fetch(`${API_BASE}/tests`)),
   get: async (testID: string) => handleResponse<Test>(await fetch(`${API_BASE}/tests/${testID}`)),
-  create: async (test: Omit<Test, 'createdAt' | 'updatedAt'>) => 
+  create: async (test: Omit<Test, 'createdAt' | 'updatedAt'>) =>
     handleResponse<Test>(await fetch(`${API_BASE}/tests`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

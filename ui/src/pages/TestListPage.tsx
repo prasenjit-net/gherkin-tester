@@ -48,6 +48,7 @@ export default function TestListPage() {
         description: newTest.description,
         content: 'Feature: Example\n  Scenario: Example\n    Given setup',
         tags: newTest.tags.split(',').map(t => t.trim()).filter(t => t),
+        projectId: '',
       })
       setNewTest({ id: '', name: '', description: '', tags: '' })
       setShowNewForm(false)
