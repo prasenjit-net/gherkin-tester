@@ -6,6 +6,7 @@ import clsx from 'clsx'
 import { LogoFull } from './Logo'
 import { metaApi } from '../services/api'
 import { useEventBus } from '../context/EventBusContext'
+import { useToast } from './Toast'
 
 type ThemeMode = 'light' | 'dark' | 'system'
 
@@ -77,12 +78,37 @@ const applyTheme = (mode: ThemeMode) => {
 export default function Layout() {
   const [themeMode, setThemeMode] = useState<ThemeMode>(getInitialTheme)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
-  const { status: busStatus } = useEventBus()
+  const { status: busStatus, on } = useEventBus()
+  const { toast } = useToast()
   const { data: meta } = useQuery({
     queryKey: ['meta'],
     queryFn: metaApi.get,
     staleTime: Infinity,
   })
+
+  // Global test-execution result notifications — shown on every page.
+  useEffect(() => {
+    return on<{ status: string; testName?: string; passed?: number; failed?: number }>(
+      'queue.update',
+      ({ payload: item }) => {
+        if (item.status === 'passed') {
+          toast(
+            `✅ "${item.testName ?? 'Test'}" passed` +
+              (item.passed != null ? ` — ${item.passed} scenario${item.passed !== 1 ? 's' : ''}` : ''),
+            'success',
+          )
+        } else if (item.status === 'failed') {
+          toast(
+            `❌ "${item.testName ?? 'Test'}" failed` +
+              (item.failed != null ? ` — ${item.failed} failure${item.failed !== 1 ? 's' : ''}` : ''),
+            'error',
+          )
+        } else if (item.status === 'error') {
+          toast(`⚠️ "${item.testName ?? 'Test'}" errored`, 'error')
+        }
+      },
+    )
+  }, [on, toast])
 
   useEffect(() => {
     applyTheme(themeMode)
