@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { CheckCircle, ChevronDown, ChevronUp, Clock, ListOrdered, Loader2, PlayCircle, Trash2, XCircle } from 'lucide-react'
 import { queueApi } from '../services/api'
-import { useEventBus } from '../hooks/useEventBus'
+import { useEventBus } from '../context/EventBusContext'
 import type { QueueItem } from '../types'
 
 function statusBadge(status: QueueItem['status']) {
@@ -125,7 +125,7 @@ function ItemRow({ item, tick }: { item: QueueItem; tick: number }) {
 export default function QueuePage() {
   const [items, setItems] = useState<QueueItem[]>([])
   const [tick, setTick] = useState(0)
-  const { connected, on } = useEventBus()
+  const { on } = useEventBus()
 
   // Fetch initial queue state, then keep in sync via SSE.
   useEffect(() => {
@@ -167,11 +167,6 @@ export default function QueuePage() {
         </div>
 
         <div className="flex shrink-0 items-center gap-3">
-          <span className={`flex items-center gap-1.5 text-xs font-medium ${connected ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-slate-500'}`}>
-            <span className={`h-2 w-2 rounded-full ${connected ? 'animate-pulse bg-green-500' : 'bg-gray-300 dark:bg-slate-600'}`} />
-            {connected ? 'Live' : 'Disconnected'}
-          </span>
-
           {hasCompleted && (
             <button
               onClick={() => queueApi.clearCompleted().catch(() => {})}

@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { EventBusProvider } from './context/EventBusContext'
 import Layout from './components/Layout'
 import DashboardPage from './pages/DashboardPage'
 import ExamplesPage from './pages/ExamplesPage'
@@ -11,21 +12,23 @@ import QueuePage from './pages/QueuePage'
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Layout />}>
-        <Route index element={<Navigate to="/projects" replace />} />
-        <Route path="dashboard" element={<DashboardPage />} />
-        <Route path="examples" element={<ExamplesPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-        <Route path="queue" element={<QueuePage />} />
+    <EventBusProvider>
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Navigate to="/projects" replace />} />
+          <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="examples" element={<ExamplesPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="queue" element={<QueuePage />} />
 
-        {/* Projects */}
-        <Route path="projects" element={<ProjectsPage />} />
-        <Route path="projects/:projectID/features" element={<ProjectFeaturesPage />} />
-        <Route path="projects/:projectID/features/:testID/edit" element={<ProjectFeatureEditorPage />} />
-        <Route path="projects/:projectID/features/:testID/history" element={<ProjectResultsPage />} />
-      </Route>
-    </Routes>
+          {/* Projects */}
+          <Route path="projects" element={<ProjectsPage />} />
+          <Route path="projects/:projectID/features" element={<ProjectFeaturesPage />} />
+          <Route path="projects/:projectID/features/:testID/edit" element={<ProjectFeatureEditorPage />} />
+          <Route path="projects/:projectID/features/:testID/history" element={<ProjectResultsPage />} />
+        </Route>
+      </Routes>
+    </EventBusProvider>
   )
 }
 

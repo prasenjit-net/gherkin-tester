@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Download, Plus, Save, Trash2 } from 'lucide-react'
 import SectionHeader from '../components/SectionHeader'
 import { configApi, karateApi, metaApi } from '../services/api'
-import { useEventBus } from '../hooks/useEventBus'
+import { useEventBus } from '../context/EventBusContext'
 import type { AppConfig, KarateVersion } from '../types'
 
 export default function SettingsPage() {

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { BookOpen, FolderKanban, LayoutDashboard, ListOrdered, Menu, Monitor, Moon, Settings, Sparkles, Sun, X } from 'lucide-react'
+import { BookOpen, FolderKanban, LayoutDashboard, ListOrdered, Menu, Monitor, Moon, Settings, Sparkles, Sun, Wifi, WifiOff, X } from 'lucide-react'
 import clsx from 'clsx'
 import { LogoFull } from './Logo'
 import { metaApi } from '../services/api'
+import { useEventBus } from '../context/EventBusContext'
 
 type ThemeMode = 'light' | 'dark' | 'system'
 
@@ -19,6 +20,34 @@ const navItems = [
 ]
 
 const appRepoUrl = 'https://github.com/prasenjit-net/go-app-template'
+
+function ConnectionIndicator({ status }: { status: 'connecting' | 'connected' | 'disconnected' }) {
+  if (status === 'connected') {
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+        <Wifi className="h-3.5 w-3.5" />
+        <span>Connected</span>
+      </div>
+    )
+  }
+  if (status === 'connecting') {
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-amber-500 dark:text-amber-400">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+        </span>
+        <span>Connecting…</span>
+      </div>
+    )
+  }
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-red-500 dark:text-red-400">
+      <WifiOff className="h-3.5 w-3.5" />
+      <span>Disconnected</span>
+    </div>
+  )
+}
 
 const getInitialTheme = (): ThemeMode => {
   if (typeof window === 'undefined') {
@@ -48,6 +77,7 @@ const applyTheme = (mode: ThemeMode) => {
 export default function Layout() {
   const [themeMode, setThemeMode] = useState<ThemeMode>(getInitialTheme)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const { status: busStatus } = useEventBus()
   const { data: meta } = useQuery({
     queryKey: ['meta'],
     queryFn: metaApi.get,
@@ -150,6 +180,9 @@ export default function Layout() {
           </div>
 
           <div className="border-t border-gray-200 p-4 dark:border-slate-800">
+            <div className="mb-3">
+              <ConnectionIndicator status={busStatus} />
+            </div>
             <div className="text-xs text-gray-500 dark:text-slate-400">
               <p className="font-medium">{meta?.name ?? 'Go App Template'}</p>
               <p>{meta?.description ?? 'Embedded Go + React starter'}</p>
@@ -172,7 +205,9 @@ export default function Layout() {
               <Menu className="h-5 w-5" />
             </button>
             <LogoFull iconSize={32} title="go-app" />
-            <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-1 dark:bg-slate-800">
+            <div className="flex items-center gap-2">
+              <ConnectionIndicator status={busStatus} />
+              <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-1 dark:bg-slate-800">
               {themeOptions.map((option) => (
                 <button
                   key={option.value}
@@ -188,6 +223,7 @@ export default function Layout() {
                   {option.label}
                 </button>
               ))}
+              </div>
             </div>
           </div>
         </header>
@@ -257,6 +293,9 @@ export default function Layout() {
           </nav>
 
           <div className="border-t border-gray-200 p-4 text-xs text-gray-500 dark:border-slate-800 dark:text-slate-400">
+            <div className="mb-2">
+              <ConnectionIndicator status={busStatus} />
+            </div>
             <p className="font-medium">{meta?.name ?? 'Go App Template'}</p>
             <p>{meta?.description ?? 'Embedded Go + React starter'}</p>
           </div>

@@ -56,11 +56,11 @@ func NewHandler(cfg config.Config, configFile string, build version.Info, st *st
 	return &Handler{config: cfg, configFile: configFile, version: build, storage: st, executor: exec, queue: q, bus: bus}
 }
 
-// EventStream proxies to the global event bus SSE handler.
+// EventStream upgrades to WebSocket and proxies to the global event bus.
 func (h *Handler) EventStream(w http.ResponseWriter, r *http.Request) {
 	// Send a queue.snapshot immediately so the client has initial state.
 	h.bus.Publish("queue.snapshot", map[string]any{"items": h.queue.Items()})
-	h.bus.ServeSSE(w, r)
+	h.bus.ServeWS(w, r)
 }
 
 
