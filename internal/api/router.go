@@ -41,7 +41,15 @@ func NewRouter(cfg config.Config, logger *slog.Logger, build version.Info, st *s
 		r.Post("/projects", h.CreateProject)
 		r.Get("/projects", h.ListProjects)
 		r.Get("/projects/{projectID}", h.GetProject)
+		r.Put("/projects/{projectID}", h.UpdateProject)
 		r.Delete("/projects/{projectID}", h.DeleteProject)
+
+		// Karate version management
+		r.Get("/karate-versions", h.KarateVersionsList)
+		r.Post("/karate-versions", h.KarateVersionsAdd)
+		r.Delete("/karate-versions/{version}", h.KarateVersionsRemove)
+		r.Get("/karate-versions/{version}/status", h.KarateVersionStatus)
+		r.Get("/karate-releases", h.KarateReleasesProxy)
 
 		// Project-scoped test routes
 		r.Post("/projects/{projectID}/tests", h.CreateProjectTest)

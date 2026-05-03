@@ -33,25 +33,30 @@ func NewExecutorFactory(config ExecutionConfig, logger *slog.Logger) *ExecutorFa
 // GetExecutor returns a KarateExecutor when the JAR is configured and java is in PATH.
 // Falls back to MockExecutor with a warning otherwise.
 func (f *ExecutorFactory) GetExecutor() (Executor, error) {
+	return f.GetExecutorForJAR(f.config.KarateJAR)
+}
+
+// GetExecutorForJAR returns an executor using the given JAR path.
+func (f *ExecutorFactory) GetExecutorForJAR(jarPath string) (Executor, error) {
 	javaPath, err := resolveJava()
 	if err != nil {
 		f.logger.Warn("java not found in PATH, using mock executor", "error", err)
 		return &MockExecutor{}, nil
 	}
 
-	if f.config.KarateJAR == "" {
-		f.logger.Warn("karate JAR not configured (tests.karateJar), using mock executor")
+	if jarPath == "" {
+		f.logger.Warn("karate JAR not configured, using mock executor")
 		return &MockExecutor{}, nil
 	}
 
-	if _, err := os.Stat(f.config.KarateJAR); err != nil {
-		f.logger.Warn("karate JAR not found, using mock executor", "path", f.config.KarateJAR, "error", err)
+	if _, err := os.Stat(jarPath); err != nil {
+		f.logger.Warn("karate JAR not found, using mock executor", "path", jarPath, "error", err)
 		return &MockExecutor{}, nil
 	}
 
-	absJAR, err := filepath.Abs(f.config.KarateJAR)
+	absJAR, err := filepath.Abs(jarPath)
 	if err != nil {
-		f.logger.Warn("could not resolve karate JAR path, using mock executor", "path", f.config.KarateJAR, "error", err)
+		f.logger.Warn("could not resolve karate JAR path, using mock executor", "path", jarPath, "error", err)
 		return &MockExecutor{}, nil
 	}
 

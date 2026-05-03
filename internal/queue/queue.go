@@ -41,23 +41,25 @@ type Item struct {
 }
 
 type Queue struct {
-	mu      sync.Mutex
-	items   []*Item
-	nextID  int64
-	exec    testclient.Executor
-	st      *storage.Storage
-	log     *slog.Logger
-	clients map[chan []byte]struct{}
-	work    chan struct{}
+	mu          sync.Mutex
+	items       []*Item
+	nextID      int64
+	exec        testclient.Executor
+	execFactory *testclient.ExecutorFactory
+	st          *storage.Storage
+	log         *slog.Logger
+	clients     map[chan []byte]struct{}
+	work        chan struct{}
 }
 
-func New(exec testclient.Executor, st *storage.Storage, log *slog.Logger) *Queue {
+func New(exec testclient.Executor, execFactory *testclient.ExecutorFactory, st *storage.Storage, log *slog.Logger) *Queue {
 	q := &Queue{
-		exec:    exec,
-		st:      st,
-		log:     log,
-		clients: make(map[chan []byte]struct{}),
-		work:    make(chan struct{}, 256),
+		exec:        exec,
+		execFactory: execFactory,
+		st:          st,
+		log:         log,
+		clients:     make(map[chan []byte]struct{}),
+		work:        make(chan struct{}, 256),
 	}
 	q.loadHistory()
 	go q.run()
@@ -284,7 +286,8 @@ func (q *Queue) processOne() bool {
 	var result *storage.TestResult
 	var execErr error
 	if fetchErr == nil {
-		result, execErr = q.exec.Execute("", test)
+		exec := q.resolveExecutor(item.ProjectID)
+		result, execErr = exec.Execute("", test)
 	}
 
 	q.mu.Lock()
@@ -326,6 +329,31 @@ func (q *Queue) processOne() bool {
 	q.broadcastItem(item)
 	q.log.Info("queue: test complete", "id", item.ID, "status", item.Status)
 	return true
+}
+
+// resolveExecutor picks the right executor for a project's configured karate version.
+// Falls back to the default executor if no version or factory is configured.
+func (q *Queue) resolveExecutor(projectID string) testclient.Executor {
+	if q.execFactory == nil {
+		return q.exec
+	}
+	proj, err := q.st.GetProject(projectID)
+	if err != nil || proj.KarateVersion == "" {
+		// Try latest configured version
+		if latest := q.st.LatestKarateVersion(); latest != "" {
+			jarPath := q.st.KarateJARPath(latest)
+			if exec, err := q.execFactory.GetExecutorForJAR(jarPath); err == nil {
+				return exec
+			}
+		}
+		return q.exec
+	}
+	jarPath := q.st.KarateJARPath(proj.KarateVersion)
+	exec, err := q.execFactory.GetExecutorForJAR(jarPath)
+	if err != nil {
+		return q.exec
+	}
+	return exec
 }
 
 func (q *Queue) broadcastItem(item *Item) {

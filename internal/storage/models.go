@@ -3,11 +3,12 @@ package storage
 import "time"
 
 type Project struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Description   string    `json:"description"`
+	KarateVersion string    `json:"karateVersion,omitempty"`
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
 type Test struct {
@@ -36,3 +37,10 @@ type TestResult struct {
 	Passed    int       `json:"passed"`
 	Failed    int       `json:"failed"`
 }
+
+// KarateVersion represents a configured Karate JAR version.
+type KarateVersion struct {
+	Version string    `json:"version"`
+	AddedAt time.Time `json:"addedAt"`
+}
+

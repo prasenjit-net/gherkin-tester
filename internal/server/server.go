@@ -52,7 +52,10 @@ func New(cfg config.Config, logger *slog.Logger, build version.Info, options Opt
 		return nil, fmt.Errorf("init executor: %w", err)
 	}
 
-	q := queue.New(executor, st, logger)
+	q := queue.New(executor, executorFactory, st, logger)
+
+	// Download any missing JARs for configured karate versions in the background.
+	go st.EnsureJARsDownloaded(logger)
 
 	return &App{
 		cfg:      cfg,

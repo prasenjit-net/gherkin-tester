@@ -441,3 +441,96 @@ func (h *Handler) QueueStream(w http.ResponseWriter, r *http.Request) {
 	h.queue.ServeSSE(w, r)
 }
 
+// ─── Karate version handlers ─────────────────────────────────────────────────
+
+func (h *Handler) KarateVersionsList(w http.ResponseWriter, r *http.Request) {
+	versions, err := h.storage.ListKarateVersions()
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if versions == nil {
+		versions = []storage.KarateVersion{}
+	}
+	respondJSON(w, http.StatusOK, versions)
+}
+
+func (h *Handler) KarateVersionsAdd(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Version string `json:"version"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Version == "" {
+		respondError(w, http.StatusBadRequest, "version is required")
+		return
+	}
+	if err := h.storage.AddKarateVersion(body.Version); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	// Kick off download in background
+	go func() {
+		jarPath := h.storage.KarateJARPath(body.Version)
+		if _, err := storage.StatFile(jarPath); err != nil {
+			_ = storage.DownloadKarateJAR(body.Version, jarPath, h.storage.Logger())
+		}
+	}()
+	respondJSON(w, http.StatusCreated, map[string]string{"version": body.Version, "status": "added"})
+}
+
+func (h *Handler) KarateVersionsRemove(w http.ResponseWriter, r *http.Request) {
+	version := chi.URLParam(r, "version")
+	if err := h.storage.RemoveKarateVersion(version); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"status": "removed"})
+}
+
+func (h *Handler) KarateReleasesProxy(w http.ResponseWriter, r *http.Request) {
+	versions, err := storage.FetchKarateReleases()
+	if err != nil {
+		respondError(w, http.StatusBadGateway, "failed to fetch releases: "+err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, versions)
+}
+
+// KarateVersionStatus returns whether a version's JAR is present on disk.
+func (h *Handler) KarateVersionStatus(w http.ResponseWriter, r *http.Request) {
+	version := chi.URLParam(r, "version")
+	jarPath := h.storage.KarateJARPath(version)
+	_, err := storage.StatFile(jarPath)
+	respondJSON(w, http.StatusOK, map[string]any{
+		"version":    version,
+		"downloaded": err == nil,
+	})
+}
+
+// UpdateProject updates project metadata including karate version.
+func (h *Handler) UpdateProject(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectID")
+	project, err := h.storage.GetProject(projectID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "project not found")
+		return
+	}
+	var req struct {
+		Name          string `json:"name"`
+		Description   string `json:"description"`
+		KarateVersion string `json:"karateVersion"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Name != "" {
+		project.Name = req.Name
+	}
+	project.Description = req.Description
+	project.KarateVersion = req.KarateVersion
+	if err := h.storage.UpdateProject(project); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, project)
+}

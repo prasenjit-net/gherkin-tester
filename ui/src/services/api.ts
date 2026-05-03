@@ -1,4 +1,4 @@
-import type { ExampleResponse, HealthResponse, MetaResponse, Project, QueueItem, Test, TestResult } from '../types'
+import type { ExampleResponse, HealthResponse, KarateVersion, MetaResponse, Project, QueueItem, Test, TestResult } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
@@ -43,6 +43,12 @@ export const projectApi = {
   delete: async (projectID: string) =>
     handleResponse<{ message: string }>(await fetch(`${API_BASE}/projects/${projectID}`, {
       method: 'DELETE',
+    })),
+  update: async (projectID: string, data: { name?: string; description?: string; karateVersion?: string }) =>
+    handleResponse<Project>(await fetch(`${API_BASE}/projects/${projectID}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
     })),
   listTests: async (projectID: string) =>
     handleResponse<Test[]>(await fetch(`${API_BASE}/projects/${projectID}/tests`)),
@@ -105,4 +111,19 @@ export const testApi = {
   })),
   getResult: async (testID: string) => handleResponse<TestResult>(await fetch(`${API_BASE}/tests/${testID}/results`)),
   getHistory: async (testID: string) => handleResponse<TestResult[]>(await fetch(`${API_BASE}/tests/${testID}/history`)),
+}
+
+export const karateApi = {
+  listVersions: async () => handleResponse<KarateVersion[]>(await fetch(`${API_BASE}/karate-versions`)),
+  addVersion: async (version: string) =>
+    handleResponse<{ version: string; status: string }>(await fetch(`${API_BASE}/karate-versions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version }),
+    })),
+  removeVersion: async (version: string) =>
+    handleResponse<{ status: string }>(await fetch(`${API_BASE}/karate-versions/${version}`, { method: 'DELETE' })),
+  versionStatus: async (version: string) =>
+    handleResponse<{ version: string; downloaded: boolean }>(await fetch(`${API_BASE}/karate-versions/${version}/status`)),
+  fetchReleases: async () => handleResponse<string[]>(await fetch(`${API_BASE}/karate-releases`)),
 }

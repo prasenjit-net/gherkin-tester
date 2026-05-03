@@ -13,14 +13,18 @@ import (
 type Storage struct {
 projectsDir   string
 executionsDir string
+settingsDir   string
+binDir        string
 logger        *slog.Logger
 }
 
 func New(dataDir string, logger *slog.Logger) (*Storage, error) {
 projectsDir := filepath.Join(dataDir, "projects")
 executionsDir := filepath.Join(dataDir, "executions")
+settingsDir := filepath.Join(dataDir, "settings")
+binDir := filepath.Join(dataDir, "bin")
 
-for _, dir := range []string{projectsDir, executionsDir} {
+for _, dir := range []string{projectsDir, executionsDir, settingsDir, binDir} {
 if err := os.MkdirAll(dir, 0o755); err != nil {
 return nil, fmt.Errorf("create dir %s: %w", dir, err)
 }
@@ -29,6 +33,8 @@ return nil, fmt.Errorf("create dir %s: %w", dir, err)
 st := &Storage{
 projectsDir:   projectsDir,
 executionsDir: executionsDir,
+settingsDir:   settingsDir,
+binDir:        binDir,
 logger:        logger,
 }
 st.migrate(dataDir)
@@ -47,6 +53,83 @@ return filepath.Join(s.projectsDir, projectID, "tests", testID)
 
 func (s *Storage) execDir(execID string) string {
 return filepath.Join(s.executionsDir, execID)
+}
+
+func (s *Storage) versionsFile() string {
+return filepath.Join(s.settingsDir, "karate_versions.json")
+}
+
+// KarateJARPath returns the expected path for a given Karate version's JAR.
+func (s *Storage) KarateJARPath(version string) string {
+return filepath.Join(s.binDir, "karate-"+version+".jar")
+}
+
+// BinDir returns the bin directory path.
+func (s *Storage) BinDir() string { return s.binDir }
+
+// Logger returns the storage logger (used by handlers for download operations).
+func (s *Storage) Logger() *slog.Logger { return s.logger }
+
+// ─── Karate versions ──────────────────────────────────────────────────────────
+
+func (s *Storage) ListKarateVersions() ([]KarateVersion, error) {
+data, err := os.ReadFile(s.versionsFile())
+if os.IsNotExist(err) {
+return []KarateVersion{}, nil
+}
+if err != nil {
+return nil, fmt.Errorf("read karate versions: %w", err)
+}
+var versions []KarateVersion
+if err := json.Unmarshal(data, &versions); err != nil {
+return nil, fmt.Errorf("unmarshal karate versions: %w", err)
+}
+return versions, nil
+}
+
+func (s *Storage) AddKarateVersion(version string) error {
+versions, err := s.ListKarateVersions()
+if err != nil {
+return err
+}
+for _, v := range versions {
+if v.Version == version {
+return nil // already exists
+}
+}
+versions = append([]KarateVersion{{Version: version, AddedAt: time.Now()}}, versions...)
+return s.saveVersions(versions)
+}
+
+func (s *Storage) RemoveKarateVersion(version string) error {
+versions, err := s.ListKarateVersions()
+if err != nil {
+return err
+}
+filtered := versions[:0]
+for _, v := range versions {
+if v.Version != version {
+filtered = append(filtered, v)
+}
+}
+return s.saveVersions(filtered)
+}
+
+// LatestKarateVersion returns the most recently added version, or "" if none configured.
+func (s *Storage) LatestKarateVersion() string {
+versions, err := s.ListKarateVersions()
+if err != nil || len(versions) == 0 {
+return ""
+}
+return versions[0].Version
+}
+
+func (s *Storage) saveVersions(versions []KarateVersion) error {
+data, err := json.MarshalIndent(versions, "", "  ")
+if err != nil {
+return fmt.Errorf("marshal karate versions: %w", err)
+}
+return os.WriteFile(s.versionsFile(), data, 0o644)
 }
 
 // ─── Projects ─────────────────────────────────────────────────────────────────
@@ -111,6 +194,20 @@ if err := os.RemoveAll(s.projectDir(projectID)); err != nil && !os.IsNotExist(er
 return fmt.Errorf("delete project: %w", err)
 }
 s.logger.Info("project deleted", "id", projectID)
+return nil
+}
+
+func (s *Storage) UpdateProject(project *Project) error {
+project.UpdatedAt = time.Now()
+dir := s.projectDir(project.ID)
+data, err := json.MarshalIndent(project, "", "  ")
+if err != nil {
+return fmt.Errorf("marshal project: %w", err)
+}
+if err := os.WriteFile(filepath.Join(dir, "project.json"), data, 0o644); err != nil {
+return fmt.Errorf("write project: %w", err)
+}
+s.logger.Info("project updated", "id", project.ID)
 return nil
 }
 

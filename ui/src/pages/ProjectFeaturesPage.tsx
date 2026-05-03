@@ -136,7 +136,15 @@ export default function ProjectFeaturesPage() {
             <div key={test.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
-                  <h3 className="truncate font-semibold text-gray-900 dark:text-slate-100">{test.name}</h3>
+                  <h3 className="truncate font-semibold text-gray-900 dark:text-slate-100">
+                    <Link
+                      to={`/projects/${projectID}/features/${test.id}/edit`}
+                      className="hover:text-blue-600 dark:hover:text-blue-400"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {test.name}
+                    </Link>
+                  </h3>
                   {test.description && (
                     <p className="mt-0.5 text-sm text-gray-500 dark:text-slate-400">{test.description}</p>
                   )}

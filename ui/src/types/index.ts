@@ -37,8 +37,14 @@ export interface Project {
   id: string
   name: string
   description: string
+  karateVersion?: string
   createdAt: string
   updatedAt: string
+}
+
+export interface KarateVersion {
+  version: string
+  addedAt: string
 }
 
 export interface Test {
