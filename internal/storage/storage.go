@@ -149,6 +149,20 @@ return ""
 return versions[0].Version
 }
 
+// HasKarateVersion reports whether version is registered in settings.
+func (s *Storage) HasKarateVersion(version string) bool {
+versions, err := s.ListKarateVersions()
+if err != nil {
+return false
+}
+for _, v := range versions {
+if v.Version == version {
+return true
+}
+}
+return false
+}
+
 func (s *Storage) saveVersions(versions []KarateVersion) error {
 data, err := json.MarshalIndent(versions, "", "  ")
 if err != nil {

@@ -272,25 +272,54 @@ func (q *Queue) processOne() bool {
 }
 
 // resolveExecutor picks the right executor for a project's configured karate version.
-// Falls back to the default executor if no version or factory is configured.
+// Resolution order:
+//  1. Project's explicit karateVersion (if set AND present in settings)
+//  2. Latest configured karate version
+//  3. Default executor (mock if no JAR available)
+//
+// For any chosen version: if the JAR is missing from disk but the version is
+// registered in settings, it is downloaded synchronously before executing.
 func (q *Queue) resolveExecutor(projectID string) testclient.Executor {
 	if q.execFactory == nil {
 		return q.exec
 	}
+
+	// Determine which version to use.
+	targetVersion := ""
 	proj, err := q.st.GetProject(projectID)
-	if err != nil || proj.KarateVersion == "" {
-		// Try latest configured version
-		if latest := q.st.LatestKarateVersion(); latest != "" {
-			jarPath := q.st.KarateJARPath(latest)
-			if exec, err := q.execFactory.GetExecutorForJAR(jarPath); err == nil {
-				return exec
-			}
+	if err == nil && proj.KarateVersion != "" {
+		// Only use the project version if it is still registered in settings.
+		if q.st.HasKarateVersion(proj.KarateVersion) {
+			targetVersion = proj.KarateVersion
+		} else {
+			q.log.Warn("queue: project karate version not in settings, falling back to latest",
+				"project", projectID, "version", proj.KarateVersion)
 		}
+	}
+	if targetVersion == "" {
+		targetVersion = q.st.LatestKarateVersion()
+	}
+	if targetVersion == "" {
+		// No versions configured at all — use whatever the server started with.
 		return q.exec
 	}
-	jarPath := q.st.KarateJARPath(proj.KarateVersion)
+
+	// Ensure the JAR is present; download if registered but missing.
+	jarPath := q.st.KarateJARPath(targetVersion)
+	if _, statErr := storage.StatFile(jarPath); statErr != nil {
+		q.log.Info("queue: karate JAR missing, downloading before execution",
+			"version", targetVersion, "path", jarPath)
+		if dlErr := storage.DownloadKarateJAR(targetVersion, jarPath, q.log); dlErr != nil {
+			q.log.Error("queue: failed to download karate JAR, falling back to default executor",
+				"version", targetVersion, "error", dlErr)
+			return q.exec
+		}
+	}
+
 	exec, err := q.execFactory.GetExecutorForJAR(jarPath)
 	if err != nil {
+		q.log.Error("queue: failed to create executor for JAR, falling back",
+			"path", jarPath, "error", err)
 		return q.exec
 	}
 	return exec
