@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ChevronRight, ListOrdered, Save } from 'lucide-react'
 import SectionHeader from '../components/SectionHeader'
+import QueueModal from '../components/QueueModal'
 import { useToast } from '../components/Toast'
-import { projectApi, queueApi } from '../services/api'
+import { projectApi } from '../services/api'
 import type { Test } from '../types'
 
 const inputCls =
@@ -18,6 +19,7 @@ export default function ProjectFeatureEditorPage() {
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [queueModalOpen, setQueueModalOpen] = useState(false)
 
   useEffect(() => { if (projectID && testID) loadTest() }, [projectID, testID])
 
@@ -135,21 +137,20 @@ export default function ProjectFeatureEditorPage() {
               {isSaving ? 'Saving…' : saved ? 'Saved ✓' : 'Save Feature'}
             </button>
             <button
-              onClick={async () => {
-                if (!test || !projectID) return
-                try {
-                  await queueApi.add(test.id, projectID, test.name)
-                  toast(`"${test.name}" queued for execution`)
-                } catch (e) {
-                  toast(e instanceof Error ? e.message : 'Failed to queue test', 'error')
-                }
-              }}
+              onClick={() => setQueueModalOpen(true)}
               className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700"
             >
               <ListOrdered className="h-4 w-4" /> Queue &amp; Run
             </button>
           </div>
         </div>
+      )}
+
+      {queueModalOpen && test && (
+        <QueueModal
+          test={test}
+          onClose={() => setQueueModalOpen(false)}
+        />
       )}
     </div>
   )

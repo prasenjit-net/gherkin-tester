@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowUpDown, ChevronRight, CloudDownload, FilePlus, GitBranch, GitCommit, Loader2, ListOrdered, Pencil, RefreshCw, Save, Tag, Trash2 } from 'lucide-react'
 import SectionHeader from '../components/SectionHeader'
+import QueueModal from '../components/QueueModal'
 import { useToast } from '../components/Toast'
-import { karateApi, projectApi, queueApi } from '../services/api'
+import { karateApi, projectApi } from '../services/api'
 import type { GitStatusResult, KarateVersion, Project, Test } from '../types'
 
 const inputCls =
@@ -36,6 +37,9 @@ export default function ProjectFeaturesPage() {
   const [commitMsg, setCommitMsg] = useState('')
   const [pushing, setPushing] = useState(false)
   const [pulling, setPulling] = useState(false)
+
+  // Queue modal
+  const [queueTest, setQueueTest] = useState<Test | null>(null)
 
   useEffect(() => {
     if (projectID) {
@@ -444,14 +448,7 @@ export default function ProjectFeaturesPage() {
                     <Pencil className="h-3.5 w-3.5" /> Edit
                   </Link>
                   <button
-                    onClick={async () => {
-                      try {
-                        await queueApi.add(test.id, projectID!, test.name)
-                        toast(`"${test.name}" queued for execution`)
-                      } catch (e) {
-                        toast(e instanceof Error ? e.message : 'Failed to queue test', 'error')
-                      }
-                    }}
+                    onClick={() => setQueueTest(test)}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 px-3 py-1.5 text-sm font-medium text-green-700 transition-colors hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-900/20"
                   >
                     <ListOrdered className="h-3.5 w-3.5" /> Queue
@@ -467,6 +464,13 @@ export default function ProjectFeaturesPage() {
             </div>
           ))}
         </div>
+      )}
+
+      {queueTest && (
+        <QueueModal
+          test={queueTest}
+          onClose={() => setQueueTest(null)}
+        />
       )}
     </div>
   )

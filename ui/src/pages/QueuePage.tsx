@@ -42,6 +42,16 @@ function ItemRow({ item, tick }: { item: QueueItem; tick: number }) {
           <div className="mb-1 flex flex-wrap items-center gap-2">
             {statusBadge(item.status)}
             <span className="truncate font-medium text-gray-900 dark:text-slate-100">{item.testName || item.testId}</span>
+            {item.environmentId && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-medium">
+                🌐 {item.environmentId}
+              </span>
+            )}
+            {item.tags && item.tags.length > 0 && item.tags.map(tag => (
+              <span key={tag} className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 text-xs font-mono">
+                @{tag.replace(/^@/, '')}
+              </span>
+            ))}
           </div>
           <div className="flex flex-wrap gap-4 text-xs text-gray-400 dark:text-slate-500">
             <span>#{item.id}</span>

@@ -342,7 +342,7 @@ func (h *Handler) RunProjectTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.executor.Execute("", test)
+	result, err := h.executor.Execute("", test, map[string]string{}, nil)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -476,7 +476,7 @@ func (h *Handler) RunTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.executor.Execute("", test)
+	result, err := h.executor.Execute("", test, map[string]string{}, nil)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -547,9 +547,11 @@ func (h *Handler) QueueList(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) QueueAdd(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		TestID    string `json:"testId"`
-		ProjectID string `json:"projectId"`
-		TestName  string `json:"testName"`
+		TestID        string   `json:"testId"`
+		ProjectID     string   `json:"projectId"`
+		TestName      string   `json:"testName"`
+		EnvironmentID string   `json:"environmentId"`
+		Tags          []string `json:"tags"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
@@ -559,7 +561,7 @@ func (h *Handler) QueueAdd(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "testId is required")
 		return
 	}
-	item := h.queue.Enqueue(body.TestID, body.ProjectID, body.TestName)
+	item := h.queue.Enqueue(body.TestID, body.ProjectID, body.TestName, body.EnvironmentID, body.Tags)
 	respondJSON(w, http.StatusCreated, item)
 }
 
@@ -719,4 +721,96 @@ func (h *Handler) UpdateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondJSON(w, http.StatusOK, project)
+}
+
+// ─── Environment CRUD ─────────────────────────────────────────────────────────
+
+func (h *Handler) ListEnvironments(w http.ResponseWriter, r *http.Request) {
+	envs, err := h.storage.ListEnvironments()
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if envs == nil {
+		envs = []*storage.Environment{}
+	}
+	respondJSON(w, http.StatusOK, envs)
+}
+
+func (h *Handler) CreateEnvironment(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name        string            `json:"name"`
+		Description string            `json:"description"`
+		Properties  map[string]string `json:"properties"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if body.Name == "" {
+		respondError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	env := &storage.Environment{
+		Name:        body.Name,
+		Description: body.Description,
+		Properties:  body.Properties,
+	}
+	if env.Properties == nil {
+		env.Properties = map[string]string{}
+	}
+	if err := h.storage.CreateEnvironment(env); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusCreated, env)
+}
+
+func (h *Handler) GetEnvironment(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	env, err := h.storage.GetEnvironment(id)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "environment not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, env)
+}
+
+func (h *Handler) UpdateEnvironment(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	env, err := h.storage.GetEnvironment(id)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "environment not found")
+		return
+	}
+	var body struct {
+		Name        string            `json:"name"`
+		Description string            `json:"description"`
+		Properties  map[string]string `json:"properties"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if body.Name != "" {
+		env.Name = body.Name
+	}
+	env.Description = body.Description
+	if body.Properties != nil {
+		env.Properties = body.Properties
+	}
+	if err := h.storage.UpdateEnvironment(env); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, env)
+}
+
+func (h *Handler) DeleteEnvironment(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.storage.DeleteEnvironment(id); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

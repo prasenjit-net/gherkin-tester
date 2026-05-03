@@ -23,20 +23,22 @@ const (
 )
 
 type Item struct {
-	ID        string     `json:"id"`
-	TestID    string     `json:"testId"`
-	ProjectID string     `json:"projectId"`
-	TestName  string     `json:"testName"`
-	Status    Status     `json:"status"`
-	QueuedAt  time.Time  `json:"queuedAt"`
-	StartedAt *time.Time `json:"startedAt,omitempty"`
-	EndedAt   *time.Time `json:"endedAt,omitempty"`
-	Duration  int64      `json:"duration,omitempty"`
-	Scenarios int        `json:"scenarios,omitempty"`
-	Passed    int        `json:"passed,omitempty"`
-	Failed    int        `json:"failed,omitempty"`
-	Message   string     `json:"message,omitempty"`
-	Output    string     `json:"output,omitempty"`
+	ID            string     `json:"id"`
+	TestID        string     `json:"testId"`
+	ProjectID     string     `json:"projectId"`
+	TestName      string     `json:"testName"`
+	EnvironmentID string     `json:"environmentId,omitempty"`
+	Tags          []string   `json:"tags,omitempty"`
+	Status        Status     `json:"status"`
+	QueuedAt      time.Time  `json:"queuedAt"`
+	StartedAt     *time.Time `json:"startedAt,omitempty"`
+	EndedAt       *time.Time `json:"endedAt,omitempty"`
+	Duration      int64      `json:"duration,omitempty"`
+	Scenarios     int        `json:"scenarios,omitempty"`
+	Passed        int        `json:"passed,omitempty"`
+	Failed        int        `json:"failed,omitempty"`
+	Message       string     `json:"message,omitempty"`
+	Output        string     `json:"output,omitempty"`
 }
 
 type Queue struct {
@@ -84,35 +86,39 @@ func (q *Queue) loadHistory() {
 			status = StatusError
 		}
 		q.items = append(q.items, &Item{
-			ID:        r.ID,
-			TestID:    r.TestID,
-			ProjectID: r.ProjectID,
-			TestName:  r.TestName,
-			Status:    status,
-			QueuedAt:  s,
-			StartedAt: &s,
-			EndedAt:   &e,
-			Duration:  r.Duration,
-			Scenarios: r.Scenarios,
-			Passed:    r.Passed,
-			Failed:    r.Failed,
-			Message:   r.Message,
-			Output:    r.Output,
+			ID:            r.ID,
+			TestID:        r.TestID,
+			ProjectID:     r.ProjectID,
+			TestName:      r.TestName,
+			EnvironmentID: r.EnvironmentID,
+			Tags:          r.Tags,
+			Status:        status,
+			QueuedAt:      s,
+			StartedAt:     &s,
+			EndedAt:       &e,
+			Duration:      r.Duration,
+			Scenarios:     r.Scenarios,
+			Passed:        r.Passed,
+			Failed:        r.Failed,
+			Message:       r.Message,
+			Output:        r.Output,
 		})
 	}
 	q.log.Info("queue: loaded execution history", "count", len(results))
 }
 
 // Enqueue adds a test run to the queue and signals the worker.
-func (q *Queue) Enqueue(testID, projectID, testName string) *Item {
+func (q *Queue) Enqueue(testID, projectID, testName, environmentID string, tags []string) *Item {
 	q.mu.Lock()
 	item := &Item{
-		ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
-		TestID:    testID,
-		ProjectID: projectID,
-		TestName:  testName,
-		Status:    StatusQueued,
-		QueuedAt:  time.Now(),
+		ID:            fmt.Sprintf("%d", time.Now().UnixNano()),
+		TestID:        testID,
+		ProjectID:     projectID,
+		TestName:      testName,
+		EnvironmentID: environmentID,
+		Tags:          tags,
+		Status:        StatusQueued,
+		QueuedAt:      time.Now(),
 	}
 	q.items = append(q.items, item)
 	q.mu.Unlock()
@@ -224,8 +230,18 @@ func (q *Queue) processOne() bool {
 	var result *storage.TestResult
 	var execErr error
 	if fetchErr == nil {
+		// Load environment properties (nil-safe — empty map if no env set).
+		envProps := map[string]string{}
+		if item.EnvironmentID != "" {
+			if env, err := q.st.GetEnvironment(item.EnvironmentID); err == nil {
+				envProps = env.Properties
+			} else {
+				q.log.Warn("queue: environment not found, running without env props",
+					"environmentID", item.EnvironmentID, "error", err)
+			}
+		}
 		exec := q.resolveExecutor(item.ProjectID)
-		result, execErr = exec.Execute("", test)
+		result, execErr = exec.Execute("", test, envProps, item.Tags)
 	}
 
 	q.mu.Lock()
@@ -260,6 +276,8 @@ func (q *Queue) processOne() bool {
 		result.ID = item.ID // use the stable queue item ID for the on-disk directory
 		result.ProjectID = item.ProjectID
 		result.TestName = item.TestName
+		result.EnvironmentID = item.EnvironmentID
+		result.Tags = item.Tags
 		if err := q.st.SaveTestResult(result); err != nil {
 			q.log.Error("queue: failed to save result", "error", err)
 		}

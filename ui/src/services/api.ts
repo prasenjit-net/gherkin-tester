@@ -1,4 +1,4 @@
-import type { AppConfig, DashboardStats, ExampleResponse, GitStatusResult, HealthResponse, KarateVersion, MetaResponse, Project, QueueItem, Test, TestResult } from '../types'
+import type { AppConfig, DashboardStats, Environment, ExampleResponse, GitStatusResult, HealthResponse, KarateVersion, MetaResponse, Project, QueueItem, Test, TestResult } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
@@ -98,11 +98,11 @@ export const projectApi = {
 
 export const queueApi = {
   list: async () => handleResponse<QueueItem[]>(await fetch(`${API_BASE}/queue`)),
-  add: async (testId: string, projectId: string, testName: string) =>
+  add: async (testId: string, projectId: string, testName: string, environmentId?: string, tags?: string[]) =>
     handleResponse<QueueItem>(await fetch(`${API_BASE}/queue`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ testId, projectId, testName }),
+      body: JSON.stringify({ testId, projectId, testName, environmentId: environmentId ?? '', tags: tags ?? [] }),
     })),
   cancel: async (id: string) =>
     handleResponse<{ status: string }>(await fetch(`${API_BASE}/queue/${id}`, { method: 'DELETE' })),
@@ -158,4 +158,23 @@ export const configApi = {
 
 export const statsApi = {
   get: async () => handleResponse<DashboardStats>(await fetch(`${API_BASE}/stats`)),
+}
+
+export const environmentApi = {
+  list: async () => handleResponse<Environment[]>(await fetch(`${API_BASE}/environments`)),
+  get: async (id: string) => handleResponse<Environment>(await fetch(`${API_BASE}/environments/${id}`)),
+  create: async (env: Omit<Environment, 'id' | 'createdAt' | 'updatedAt'>) =>
+    handleResponse<Environment>(await fetch(`${API_BASE}/environments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(env),
+    })),
+  update: async (id: string, env: Partial<Omit<Environment, 'id' | 'createdAt' | 'updatedAt'>>) =>
+    handleResponse<Environment>(await fetch(`${API_BASE}/environments/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(env),
+    })),
+  delete: async (id: string) =>
+    handleResponse<void>(await fetch(`${API_BASE}/environments/${id}`, { method: 'DELETE' })),
 }

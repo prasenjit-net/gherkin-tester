@@ -42,6 +42,13 @@ func NewRouter(cfg config.Config, configFile string, logger *slog.Logger, build 
 		r.Delete("/queue/completed", h.QueueClear)
 		r.Delete("/queue/{id}", h.QueueCancel)
 
+		// Environment routes
+		r.Get("/environments", h.ListEnvironments)
+		r.Post("/environments", h.CreateEnvironment)
+		r.Get("/environments/{id}", h.GetEnvironment)
+		r.Put("/environments/{id}", h.UpdateEnvironment)
+		r.Delete("/environments/{id}", h.DeleteEnvironment)
+
 		// Project routes
 		r.Post("/projects", h.CreateProject)
 		r.Post("/projects/import", h.ImportProject)

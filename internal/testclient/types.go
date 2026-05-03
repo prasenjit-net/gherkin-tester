@@ -11,7 +11,7 @@ import (
 )
 
 type Executor interface {
-	Execute(testPath string, testFeature *storage.Test) (*storage.TestResult, error)
+	Execute(testPath string, testFeature *storage.Test, env map[string]string, tags []string) (*storage.TestResult, error)
 	IsAvailable() bool
 }
 

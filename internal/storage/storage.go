@@ -11,34 +11,37 @@ import (
 )
 
 type Storage struct {
-projectsDir   string
-executionsDir string
-settingsDir   string
-binDir        string
-logger        *slog.Logger
+	projectsDir     string
+	executionsDir   string
+	settingsDir     string
+	binDir          string
+	environmentsDir string
+	logger          *slog.Logger
 }
 
 func New(dataDir string, logger *slog.Logger) (*Storage, error) {
-projectsDir := filepath.Join(dataDir, "projects")
-executionsDir := filepath.Join(dataDir, "executions")
-settingsDir := filepath.Join(dataDir, "settings")
-binDir := filepath.Join(dataDir, "bin")
+	projectsDir := filepath.Join(dataDir, "projects")
+	executionsDir := filepath.Join(dataDir, "executions")
+	settingsDir := filepath.Join(dataDir, "settings")
+	binDir := filepath.Join(dataDir, "bin")
+	environmentsDir := filepath.Join(dataDir, "environments")
 
-for _, dir := range []string{projectsDir, executionsDir, settingsDir, binDir} {
-if err := os.MkdirAll(dir, 0o755); err != nil {
-return nil, fmt.Errorf("create dir %s: %w", dir, err)
-}
-}
+	for _, dir := range []string{projectsDir, executionsDir, settingsDir, binDir, environmentsDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, fmt.Errorf("create dir %s: %w", dir, err)
+		}
+	}
 
-st := &Storage{
-projectsDir:   projectsDir,
-executionsDir: executionsDir,
-settingsDir:   settingsDir,
-binDir:        binDir,
-logger:        logger,
-}
-st.migrate(dataDir)
-return st, nil
+	st := &Storage{
+		projectsDir:     projectsDir,
+		executionsDir:   executionsDir,
+		settingsDir:     settingsDir,
+		binDir:          binDir,
+		environmentsDir: environmentsDir,
+		logger:          logger,
+	}
+	st.migrate(dataDir)
+	return st, nil
 }
 
 // ─── Path helpers ─────────────────────────────────────────────────────────────
@@ -391,72 +394,81 @@ return nil
 //   output.log      — raw karate stdout/stderr
 
 type executionMeta struct {
-ID        string    `json:"id"`
-ProjectID string    `json:"projectId"`
-TestID    string    `json:"testId"`
-TestName  string    `json:"testName,omitempty"`
-Status    string    `json:"status"`
-Message   string    `json:"message,omitempty"`
-StartedAt time.Time `json:"startedAt"`
-EndedAt   time.Time `json:"endedAt"`
+	ID            string    `json:"id"`
+	ProjectID     string    `json:"projectId"`
+	TestID        string    `json:"testId"`
+	TestName      string    `json:"testName,omitempty"`
+	EnvironmentID string    `json:"environmentId,omitempty"`
+	Tags          []string  `json:"tags,omitempty"`
+	Status        string    `json:"status"`
+	Message       string    `json:"message,omitempty"`
+	StartedAt     time.Time `json:"startedAt"`
+	EndedAt       time.Time `json:"endedAt"`
 }
 
 type executionReport struct {
-Scenarios int   `json:"scenarios"`
-Passed    int   `json:"passed"`
-Failed    int   `json:"failed"`
-Duration  int64 `json:"duration"`
+	Scenarios int   `json:"scenarios"`
+	Passed    int   `json:"passed"`
+	Failed    int   `json:"failed"`
+	Duration  int64 `json:"duration"`
 }
 
 func (s *Storage) SaveTestResult(result *TestResult) error {
-if result.ID == "" {
-result.ID = fmt.Sprintf("%d", time.Now().UnixNano())
-}
+	if result.ID == "" {
+		result.ID = fmt.Sprintf("%d", time.Now().UnixNano())
+	}
 
-dir := s.execDir(result.ID)
-if err := os.MkdirAll(dir, 0o755); err != nil {
-return fmt.Errorf("create execution dir: %w", err)
-}
+	dir := s.execDir(result.ID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create execution dir: %w", err)
+	}
 
-// execution.json — identity + status
-meta := executionMeta{
-ID:        result.ID,
-ProjectID: result.ProjectID,
-TestID:    result.TestID,
-TestName:  result.TestName,
-Status:    result.Status,
-Message:   result.Message,
-StartedAt: result.StartedAt,
-EndedAt:   result.EndedAt,
-}
-if data, err := json.MarshalIndent(meta, "", "  "); err == nil {
-_ = os.WriteFile(filepath.Join(dir, "execution.json"), data, 0o644)
-}
+	// execution.json — identity + status
+	meta := executionMeta{
+		ID:            result.ID,
+		ProjectID:     result.ProjectID,
+		TestID:        result.TestID,
+		TestName:      result.TestName,
+		EnvironmentID: result.EnvironmentID,
+		Tags:          result.Tags,
+		Status:        result.Status,
+		Message:       result.Message,
+		StartedAt:     result.StartedAt,
+		EndedAt:       result.EndedAt,
+	}
+	if data, err := json.MarshalIndent(meta, "", "  "); err == nil {
+		_ = os.WriteFile(filepath.Join(dir, "execution.json"), data, 0o644)
+	}
 
-// report.json — karate result numbers
-report := executionReport{
-Scenarios: result.Scenarios,
-Passed:    result.Passed,
-Failed:    result.Failed,
-Duration:  result.Duration,
-}
-if data, err := json.MarshalIndent(report, "", "  "); err == nil {
-_ = os.WriteFile(filepath.Join(dir, "report.json"), data, 0o644)
-}
+	// report.json — karate result numbers
+	report := executionReport{
+		Scenarios: result.Scenarios,
+		Passed:    result.Passed,
+		Failed:    result.Failed,
+		Duration:  result.Duration,
+	}
+	if data, err := json.MarshalIndent(report, "", "  "); err == nil {
+		_ = os.WriteFile(filepath.Join(dir, "report.json"), data, 0o644)
+	}
 
-// test.feature — snapshot of feature at execution time
-featureSrc := filepath.Join(s.testDir(result.ProjectID, result.TestID), "test.feature")
-if content, err := os.ReadFile(featureSrc); err == nil {
-_ = os.WriteFile(filepath.Join(dir, "test.feature"), content, 0o644)
-}
+	// test.feature — snapshot of feature at execution time
+	featureSrc := filepath.Join(s.testDir(result.ProjectID, result.TestID), "test.feature")
+	if content, err := os.ReadFile(featureSrc); err == nil {
+		_ = os.WriteFile(filepath.Join(dir, "test.feature"), content, 0o644)
+	}
 
-// output.log — raw karate output
-if result.Output != "" {
-_ = os.WriteFile(filepath.Join(dir, "output.log"), []byte(result.Output), 0o644)
-}
+	// karate-config.js — snapshot of the generated config used for this execution
+	if result.KarateConfig != "" {
+		_ = os.WriteFile(filepath.Join(dir, "karate-config.js"), []byte(result.KarateConfig), 0o644)
+	}
 
-s.logger.Info("execution saved", "id", result.ID, "testId", result.TestID, "status", result.Status)
-return nil
+	// output.log — raw karate output
+	if result.Output != "" {
+		_ = os.WriteFile(filepath.Join(dir, "output.log"), []byte(result.Output), 0o644)
+	}
+
+	s.logger.Info("execution saved", "id", result.ID, "testId", result.TestID, "status", result.Status)
+	return nil
 }
 
 func (s *Storage) GetExecution(execID string) (*TestResult, error) {
@@ -472,29 +484,35 @@ return nil, fmt.Errorf("unmarshal execution.json: %w", err)
 }
 
 result := &TestResult{
-ID:        meta.ID,
-ProjectID: meta.ProjectID,
-TestID:    meta.TestID,
-TestName:  meta.TestName,
-Status:    meta.Status,
-Message:   meta.Message,
-StartedAt: meta.StartedAt,
-EndedAt:   meta.EndedAt,
-}
+		ID:            meta.ID,
+		ProjectID:     meta.ProjectID,
+		TestID:        meta.TestID,
+		TestName:      meta.TestName,
+		EnvironmentID: meta.EnvironmentID,
+		Tags:          meta.Tags,
+		Status:        meta.Status,
+		Message:       meta.Message,
+		StartedAt:     meta.StartedAt,
+		EndedAt:       meta.EndedAt,
+	}
 
-if reportData, err := os.ReadFile(filepath.Join(dir, "report.json")); err == nil {
-var rep executionReport
-if json.Unmarshal(reportData, &rep) == nil {
-result.Scenarios = rep.Scenarios
-result.Passed = rep.Passed
-result.Failed = rep.Failed
-result.Duration = rep.Duration
-}
-}
+	if reportData, err := os.ReadFile(filepath.Join(dir, "report.json")); err == nil {
+		var rep executionReport
+		if json.Unmarshal(reportData, &rep) == nil {
+			result.Scenarios = rep.Scenarios
+			result.Passed = rep.Passed
+			result.Failed = rep.Failed
+			result.Duration = rep.Duration
+		}
+	}
 
-if out, err := os.ReadFile(filepath.Join(dir, "output.log")); err == nil {
-result.Output = string(out)
-}
+	if out, err := os.ReadFile(filepath.Join(dir, "output.log")); err == nil {
+		result.Output = string(out)
+	}
+
+	if cfg, err := os.ReadFile(filepath.Join(dir, "karate-config.js")); err == nil {
+		result.KarateConfig = string(cfg)
+	}
 
 return result, nil
 }

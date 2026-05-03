@@ -17,18 +17,20 @@ import (
 // MockExecutor returns hardcoded passed results without running anything.
 type MockExecutor struct{}
 
-func (m *MockExecutor) Execute(testPath string, testFeature *storage.Test) (*storage.TestResult, error) {
+func (m *MockExecutor) Execute(testPath string, testFeature *storage.Test, env map[string]string, tags []string) (*storage.TestResult, error) {
+	karateConfig, _ := RenderKarateConfig(env)
 	result := &storage.TestResult{
-		TestID:    testFeature.ID,
-		Status:    "passed",
-		Message:   "Mock execution (no Karate JAR configured)",
-		Output:    fmt.Sprintf("Executed test: %s", testFeature.Name),
-		StartedAt: time.Now().Add(-2 * time.Second),
-		EndedAt:   time.Now(),
-		Duration:  2000,
-		Scenarios: 1,
-		Passed:    1,
-		Failed:    0,
+		TestID:       testFeature.ID,
+		Status:       "passed",
+		Message:      "Mock execution (no Karate JAR configured)",
+		Output:       fmt.Sprintf("Executed test: %s", testFeature.Name),
+		KarateConfig: karateConfig,
+		StartedAt:    time.Now().Add(-2 * time.Second),
+		EndedAt:      time.Now(),
+		Duration:     2000,
+		Scenarios:    1,
+		Passed:       1,
+		Failed:       0,
 	}
 	return result, nil
 }
@@ -55,7 +57,7 @@ var (
 	reElapsed          = regexp.MustCompile(`elapsed:\s+([\d.]+)s`)
 )
 
-func (k *KarateExecutor) Execute(testPath string, testFeature *storage.Test) (*storage.TestResult, error) {
+func (k *KarateExecutor) Execute(testPath string, testFeature *storage.Test, env map[string]string, tags []string) (*storage.TestResult, error) {
 	// Write the feature file to a temp working directory so Karate can find it.
 	workDir, err := os.MkdirTemp("", "karate-run-*")
 	if err != nil {
@@ -68,12 +70,37 @@ func (k *KarateExecutor) Execute(testPath string, testFeature *storage.Test) (*s
 		return nil, fmt.Errorf("write feature file: %w", err)
 	}
 
+	// Generate and write karate-config.js to the work dir so Karate picks it up.
+	karateConfig, err := RenderKarateConfig(env)
+	if err != nil {
+		return nil, fmt.Errorf("render karate-config.js: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(workDir, "karate-config.js"), []byte(karateConfig), 0644); err != nil {
+		return nil, fmt.Errorf("write karate-config.js: %w", err)
+	}
+
 	startedAt := time.Now()
 
-	cmd := exec.Command(k.javaPath,
-		"-jar", k.jarPath,
-		featurePath,
-	)
+	// Build java args: JVM -D flags, then -jar, then feature path, then --tags.
+	javaArgs := []string{}
+	for k, v := range env {
+		javaArgs = append(javaArgs, fmt.Sprintf("-D%s=%s", k, v))
+	}
+	javaArgs = append(javaArgs, "-jar", k.jarPath, featurePath)
+	if len(tags) > 0 {
+		// Prefix each tag with @ if not already present.
+		tagged := make([]string, len(tags))
+		for i, t := range tags {
+			if !strings.HasPrefix(t, "@") {
+				tagged[i] = "@" + t
+			} else {
+				tagged[i] = t
+			}
+		}
+		javaArgs = append(javaArgs, "--tags", strings.Join(tagged, ","))
+	}
+
+	cmd := exec.Command(k.javaPath, javaArgs...)
 	cmd.Dir = workDir
 
 	out, execErr := cmd.CombinedOutput()
@@ -84,11 +111,12 @@ func (k *KarateExecutor) Execute(testPath string, testFeature *storage.Test) (*s
 
 	duration := endedAt.Sub(startedAt).Milliseconds()
 	result := &storage.TestResult{
-		TestID:    testFeature.ID,
-		Output:    cleanOutput,
-		StartedAt: startedAt,
-		EndedAt:   endedAt,
-		Duration:  duration,
+		TestID:       testFeature.ID,
+		Output:       cleanOutput,
+		KarateConfig: karateConfig,
+		StartedAt:    startedAt,
+		EndedAt:      endedAt,
+		Duration:     duration,
 	}
 
 	// Parse elapsed time from output if available.

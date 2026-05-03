@@ -86,6 +86,8 @@ export interface QueueItem {
   testId: string
   projectId: string
   testName: string
+  environmentId?: string
+  tags?: string[]
   status: 'queued' | 'running' | 'passed' | 'failed' | 'error'
   queuedAt: string
   startedAt?: string
@@ -103,6 +105,9 @@ export interface TestResult {
   testId: string
   projectId: string
   testName?: string
+  environmentId?: string
+  tags?: string[]
+  karateConfig?: string
   status: 'passed' | 'failed' | 'error'
   duration: number
   message: string
@@ -112,6 +117,15 @@ export interface TestResult {
   scenarios: number
   passed: number
   failed: number
+}
+
+export interface Environment {
+  id: string
+  name: string
+  description?: string
+  properties: Record<string, string>
+  createdAt: string
+  updatedAt: string
 }
 
 export interface DashboardStats {
