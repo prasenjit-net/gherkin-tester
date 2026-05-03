@@ -1,4 +1,4 @@
-import type { AppConfig, ExampleResponse, HealthResponse, KarateVersion, MetaResponse, Project, QueueItem, Test, TestResult } from '../types'
+import type { AppConfig, DashboardStats, ExampleResponse, HealthResponse, KarateVersion, MetaResponse, Project, QueueItem, Test, TestResult } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
@@ -136,4 +136,8 @@ export const configApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(cfg),
     })),
+}
+
+export const statsApi = {
+  get: async () => handleResponse<DashboardStats>(await fetch(`${API_BASE}/stats`)),
 }

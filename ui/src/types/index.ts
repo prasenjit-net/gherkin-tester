@@ -91,6 +91,8 @@ export interface QueueItem {
 export interface TestResult {
   id: string
   testId: string
+  projectId: string
+  testName?: string
   status: 'passed' | 'failed' | 'error'
   duration: number
   message: string
@@ -102,3 +104,12 @@ export interface TestResult {
   failed: number
 }
 
+export interface DashboardStats {
+  projectCount: number
+  testCount: number
+  totalExecutions: number
+  passedCount: number
+  failedCount: number
+  errorCount: number
+  recentExecutions: TestResult[]
+}

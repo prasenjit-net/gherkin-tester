@@ -32,6 +32,7 @@ func NewRouter(cfg config.Config, configFile string, logger *slog.Logger, build 
 		r.Get("/health", h.Health)
 		r.Get("/example", h.Example)
 		r.Get("/meta", h.Meta)
+		r.Get("/stats", h.GetStats)
 		r.Get("/config", h.GetConfig)
 		r.Put("/config", h.UpdateConfig)
 

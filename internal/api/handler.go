@@ -509,6 +509,49 @@ func (h *Handler) QueueClear(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]string{"status": "cleared"})
 }
 
+// ─── Dashboard stats ──────────────────────────────────────────────────────────
+
+type dashboardStats struct {
+	ProjectCount    int                   `json:"projectCount"`
+	TestCount       int                   `json:"testCount"`
+	TotalExecutions int                   `json:"totalExecutions"`
+	PassedCount     int                   `json:"passedCount"`
+	FailedCount     int                   `json:"failedCount"`
+	ErrorCount      int                   `json:"errorCount"`
+	RecentExecutions []storage.TestResult `json:"recentExecutions"`
+}
+
+func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
+	projects, _ := h.storage.ListProjects()
+	tests, _ := h.storage.ListTests()
+	executions, _ := h.storage.ListAllExecutions()
+
+	stats := dashboardStats{
+		ProjectCount:    len(projects),
+		TestCount:       len(tests),
+		TotalExecutions: len(executions),
+	}
+	for _, e := range executions {
+		switch e.Status {
+		case "passed":
+			stats.PassedCount++
+		case "failed":
+			stats.FailedCount++
+		default:
+			stats.ErrorCount++
+		}
+	}
+	if len(executions) > 5 {
+		stats.RecentExecutions = executions[:5]
+	} else {
+		stats.RecentExecutions = executions
+	}
+	if stats.RecentExecutions == nil {
+		stats.RecentExecutions = []storage.TestResult{}
+	}
+	respondJSON(w, http.StatusOK, stats)
+}
+
 // ─── Karate version handlers ─────────────────────────────────────────────────
 
 func (h *Handler) KarateVersionsList(w http.ResponseWriter, r *http.Request) {
