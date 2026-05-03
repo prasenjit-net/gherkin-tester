@@ -42,7 +42,6 @@ type Item struct {
 type Queue struct {
 	mu          sync.Mutex
 	items       []*Item
-	nextID      int64
 	exec        testclient.Executor
 	execFactory *testclient.ExecutorFactory
 	st          *storage.Storage
@@ -107,9 +106,8 @@ func (q *Queue) loadHistory() {
 // Enqueue adds a test run to the queue and signals the worker.
 func (q *Queue) Enqueue(testID, projectID, testName string) *Item {
 	q.mu.Lock()
-	q.nextID++
 	item := &Item{
-		ID:        fmt.Sprintf("%d", q.nextID),
+		ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
 		TestID:    testID,
 		ProjectID: projectID,
 		TestName:  testName,
@@ -259,16 +257,11 @@ func (q *Queue) processOne() bool {
 	q.mu.Unlock()
 
 	if result != nil {
+		result.ID = item.ID // use the stable queue item ID for the on-disk directory
 		result.ProjectID = item.ProjectID
 		result.TestName = item.TestName
 		if err := q.st.SaveTestResult(result); err != nil {
 			q.log.Error("queue: failed to save result", "error", err)
-		} else {
-			// Sync item.ID to the on-disk execution directory name so that
-			// ClearCompleted can find and delete the correct directory.
-			q.mu.Lock()
-			item.ID = result.ID
-			q.mu.Unlock()
 		}
 	}
 
