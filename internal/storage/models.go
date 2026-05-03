@@ -7,6 +7,8 @@ type Project struct {
 	Name          string    `json:"name"`
 	Description   string    `json:"description"`
 	KarateVersion string    `json:"karateVersion,omitempty"`
+	GitURL        string    `json:"gitUrl,omitempty"`
+	GitBranch     string    `json:"gitBranch,omitempty"`
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 }

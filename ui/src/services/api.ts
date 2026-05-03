@@ -1,4 +1,4 @@
-import type { AppConfig, DashboardStats, ExampleResponse, HealthResponse, KarateVersion, MetaResponse, Project, QueueItem, Test, TestResult } from '../types'
+import type { AppConfig, DashboardStats, ExampleResponse, GitStatusResult, HealthResponse, KarateVersion, MetaResponse, Project, QueueItem, Test, TestResult } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
@@ -40,6 +40,12 @@ export const projectApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(project),
     })),
+  importGit: async (repoUrl: string, branch?: string, name?: string, description?: string, karateVersion?: string) =>
+    handleResponse<Project>(await fetch(`${API_BASE}/projects/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repoUrl, branch, name, description, karateVersion }),
+    })),
   delete: async (projectID: string) =>
     handleResponse<{ message: string }>(await fetch(`${API_BASE}/projects/${projectID}`, {
       method: 'DELETE',
@@ -76,6 +82,14 @@ export const projectApi = {
     })),
   getTestHistory: async (projectID: string, testID: string) =>
     handleResponse<TestResult[]>(await fetch(`${API_BASE}/projects/${projectID}/tests/${testID}/history`)),
+  getGitStatus: async (projectID: string) =>
+    handleResponse<GitStatusResult>(await fetch(`${API_BASE}/projects/${projectID}/git/status`)),
+  gitCommit: async (projectID: string, message: string) =>
+    handleResponse<{ status: string }>(await fetch(`${API_BASE}/projects/${projectID}/git/commit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    })),
 }
 
 export const queueApi = {

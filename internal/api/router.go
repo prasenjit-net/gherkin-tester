@@ -44,10 +44,13 @@ func NewRouter(cfg config.Config, configFile string, logger *slog.Logger, build 
 
 		// Project routes
 		r.Post("/projects", h.CreateProject)
+		r.Post("/projects/import", h.ImportProject)
 		r.Get("/projects", h.ListProjects)
 		r.Get("/projects/{projectID}", h.GetProject)
 		r.Put("/projects/{projectID}", h.UpdateProject)
 		r.Delete("/projects/{projectID}", h.DeleteProject)
+		r.Get("/projects/{projectID}/git/status", h.GetGitStatus)
+		r.Post("/projects/{projectID}/git/commit", h.GitCommitPush)
 
 		// Karate version management
 		r.Get("/karate-versions", h.KarateVersionsList)

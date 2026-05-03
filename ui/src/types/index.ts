@@ -38,8 +38,18 @@ export interface Project {
   name: string
   description: string
   karateVersion?: string
+  gitUrl?: string
+  gitBranch?: string
   createdAt: string
   updatedAt: string
+}
+
+export interface GitStatusResult {
+  branch: string
+  ahead: number
+  behind: number
+  dirty: boolean
+  lastCommit?: string
 }
 
 export interface KarateVersion {

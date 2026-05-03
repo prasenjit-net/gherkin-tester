@@ -221,6 +221,56 @@ func (h *Handler) DeleteProject(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]string{"message": "project deleted"})
 }
 
+func (h *Handler) ImportProject(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RepoURL       string `json:"repoUrl"`
+		Branch        string `json:"branch"`
+		Name          string `json:"name"`
+		Description   string `json:"description"`
+		KarateVersion string `json:"karateVersion"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.RepoURL == "" {
+		respondError(w, http.StatusBadRequest, "repoUrl is required")
+		return
+	}
+	project, err := h.storage.ImportProjectFromGit(req.RepoURL, req.Branch, req.Name, req.Description, req.KarateVersion)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusCreated, project)
+}
+
+func (h *Handler) GetGitStatus(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectID")
+	status, err := h.storage.GitStatus(projectID)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, status)
+}
+
+func (h *Handler) GitCommitPush(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectID")
+	var req struct {
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := h.storage.GitCommitAndPush(projectID, req.Message); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"status": "pushed"})
+}
+
 // ─── Test Endpoints (project-scoped) ────────────────────────────────────────
 
 func (h *Handler) CreateProjectTest(w http.ResponseWriter, r *http.Request) {
