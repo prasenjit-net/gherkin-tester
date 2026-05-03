@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams, Link } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { ChevronRight, FilePlus, ListOrdered, Pencil, Plus, Tag, Trash2 } from 'lucide-react'
 import SectionHeader from '../components/SectionHeader'
+import { useToast } from '../components/Toast'
 import { projectApi, queueApi } from '../services/api'
 import type { Project, Test } from '../types'
 
@@ -10,7 +11,7 @@ const inputCls =
 
 export default function ProjectFeaturesPage() {
   const { projectID } = useParams<{ projectID: string }>()
-  const navigate = useNavigate()
+  const { toast } = useToast()
   const [project, setProject] = useState<Project | null>(null)
   const [tests, setTests] = useState<Test[]>([])
   const [loading, setLoading] = useState(true)
@@ -151,16 +152,20 @@ export default function ProjectFeaturesPage() {
                   )}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <button
-                    onClick={() => navigate(`/projects/${projectID}/features/${test.id}/edit`)}
+                  <Link
+                    to={`/projects/${projectID}/features/${test.id}/edit`}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
                   >
                     <Pencil className="h-3.5 w-3.5" /> Edit
-                  </button>
+                  </Link>
                   <button
                     onClick={async () => {
-                      try { await queueApi.add(test.id, projectID!, test.name); navigate('/queue') }
-                      catch (e) { alert(e instanceof Error ? e.message : 'Failed to queue test') }
+                      try {
+                        await queueApi.add(test.id, projectID!, test.name)
+                        toast(`"${test.name}" queued for execution`)
+                      } catch (e) {
+                        toast(e instanceof Error ? e.message : 'Failed to queue test', 'error')
+                      }
                     }}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 px-3 py-1.5 text-sm font-medium text-green-700 transition-colors hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-900/20"
                   >

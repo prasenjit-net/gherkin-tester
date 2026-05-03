@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ChevronRight, ListOrdered, Save } from 'lucide-react'
 import SectionHeader from '../components/SectionHeader'
+import { useToast } from '../components/Toast'
 import { projectApi, queueApi } from '../services/api'
 import type { Test } from '../types'
 
@@ -11,6 +12,7 @@ const inputCls =
 export default function ProjectFeatureEditorPage() {
   const { projectID, testID } = useParams<{ projectID: string; testID: string }>()
   const navigate = useNavigate()
+  const { toast } = useToast()
   const [test, setTest] = useState<Test | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -135,8 +137,12 @@ export default function ProjectFeatureEditorPage() {
             <button
               onClick={async () => {
                 if (!test || !projectID) return
-                try { await queueApi.add(test.id, projectID, test.name); navigate('/queue') }
-                catch (e) { alert(e instanceof Error ? e.message : 'Failed to queue test') }
+                try {
+                  await queueApi.add(test.id, projectID, test.name)
+                  toast(`"${test.name}" queued for execution`)
+                } catch (e) {
+                  toast(e instanceof Error ? e.message : 'Failed to queue test', 'error')
+                }
               }}
               className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700"
             >
