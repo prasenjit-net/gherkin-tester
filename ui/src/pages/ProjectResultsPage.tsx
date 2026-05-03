@@ -1,8 +1,28 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import { CheckCircle, ChevronRight, Clock, XCircle } from 'lucide-react'
 import SectionHeader from '../components/SectionHeader'
 import { projectApi } from '../services/api'
 import type { TestResult } from '../types'
+
+function StatusBadge({ status }: { status: string }) {
+  const base = 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium'
+  if (status === 'passed') return (
+    <span className={`${base} bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300`}>
+      <CheckCircle className="h-3.5 w-3.5" /> Passed
+    </span>
+  )
+  if (status === 'failed') return (
+    <span className={`${base} bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300`}>
+      <XCircle className="h-3.5 w-3.5" /> Failed
+    </span>
+  )
+  return (
+    <span className={`${base} bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300`}>
+      <Clock className="h-3.5 w-3.5" /> {status}
+    </span>
+  )
+}
 
 export default function ProjectResultsPage() {
   const { projectID, testID } = useParams<{ projectID: string; testID: string }>()
@@ -20,97 +40,90 @@ export default function ProjectResultsPage() {
     }
   }, [projectID, testID])
 
-  const statusColor = (status: string) => {
-    if (status === 'passed') return 'bg-green-100 text-green-700'
-    if (status === 'failed') return 'bg-red-100 text-red-700'
-    return 'bg-orange-100 text-orange-700'
-  }
-
-  if (loading) return <div className="text-center py-8 text-gray-500">Loading…</div>
+  if (loading) return <p className="p-8 text-sm text-gray-500 dark:text-slate-400">Loading…</p>
 
   return (
-    <div className="space-y-6">
-      <nav className="text-sm text-gray-500 dark:text-gray-400">
-        <Link to="/projects" className="hover:text-blue-600">Projects</Link>
-        <span className="mx-2">/</span>
-        <Link to={`/projects/${projectID}/features`} className="hover:text-blue-600">{projectID}</Link>
-        <span className="mx-2">/</span>
-        <span className="text-gray-800 dark:text-gray-200 font-medium">History</span>
+    <div className="space-y-8 p-8">
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-slate-400">
+        <Link to="/projects" className="transition-colors hover:text-blue-600 dark:hover:text-blue-400">Projects</Link>
+        <ChevronRight className="h-3.5 w-3.5" />
+        <Link to={`/projects/${projectID}/features`} className="transition-colors hover:text-blue-600 dark:hover:text-blue-400">{projectID}</Link>
+        <ChevronRight className="h-3.5 w-3.5" />
+        <span className="font-medium text-gray-800 dark:text-slate-200">History</span>
       </nav>
 
-      <div className="flex justify-between items-center">
-        <SectionHeader title="Test Result History" description="Past execution runs for this feature" />
+      <div className="flex items-start justify-between gap-4">
+        <SectionHeader title="Execution History" description="Past execution runs for this feature file." />
         <button
           onClick={() => navigate(`/projects/${projectID}/features`)}
-          className="px-4 py-2 text-gray-600 hover:text-gray-900"
+          className="shrink-0 text-sm text-gray-500 transition-colors hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-100"
         >
           ← Back
         </button>
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 text-red-700 rounded-lg border border-red-200">{error}</div>
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300">{error}</div>
       )}
 
       {results.length === 0 ? (
-        <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-          <p className="text-gray-500">No results yet.</p>
-          <button
-            onClick={() => navigate(`/projects/${projectID}/features/${testID}/run`)}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Run Now
-          </button>
+        <div className="rounded-xl border border-gray-200 bg-white py-16 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <Clock className="mx-auto mb-3 h-10 w-10 text-gray-300 dark:text-slate-700" />
+          <p className="text-base font-medium text-gray-700 dark:text-slate-300">No executions yet</p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Queue the feature from the features list to run it.</p>
         </div>
       ) : (
         <div className="space-y-4">
           {results.map((result) => (
-            <div key={result.id} className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
-              <div className="flex justify-between items-start mb-4">
+            <section key={result.id} className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div className="mb-4 flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs text-gray-500 uppercase">Executed at</p>
-                  <p className="font-semibold text-gray-900 dark:text-gray-100">
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-slate-500">Executed at</p>
+                  <p className="mt-0.5 font-semibold text-gray-900 dark:text-slate-100">
                     {new Date(result.startedAt).toLocaleString()}
                   </p>
                 </div>
-                <span className={`px-3 py-1 rounded-full text-sm font-semibold ${statusColor(result.status)}`}>
-                  {result.status.toUpperCase()}
-                </span>
+                <StatusBadge status={result.status} />
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                <div>
-                  <p className="text-xs text-gray-500 uppercase">Duration</p>
-                  <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{result.duration}ms</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase">Scenarios</p>
-                  <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{result.scenarios}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase">Passed</p>
-                  <p className="text-lg font-semibold text-green-700">{result.passed}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase">Failed</p>
-                  <p className="text-lg font-semibold text-red-700">{result.failed}</p>
-                </div>
-              </div>
+
+              <dl className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                {[
+                  { label: 'Duration', value: `${result.duration}ms`, color: 'text-gray-900 dark:text-slate-100' },
+                  { label: 'Scenarios', value: result.scenarios, color: 'text-gray-900 dark:text-slate-100' },
+                  { label: 'Passed', value: result.passed, color: 'text-green-700 dark:text-green-400' },
+                  { label: 'Failed', value: result.failed, color: result.failed ? 'text-red-700 dark:text-red-400 font-bold' : 'text-gray-400 dark:text-slate-500' },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="rounded-lg border border-gray-100 p-3 text-center dark:border-slate-800">
+                    <p className="text-xs text-gray-400 dark:text-slate-500 uppercase tracking-wide">{label}</p>
+                    <p className={`mt-0.5 text-lg font-semibold ${color}`}>{value}</p>
+                  </div>
+                ))}
+              </dl>
+
               {result.message && (
-                <p className="text-sm text-gray-700 dark:text-gray-300 p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-700 mb-4">
+                <p className={`mt-4 rounded-lg border p-3 text-sm ${
+                  result.status === 'passed'
+                    ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-800/50 dark:bg-green-900/20 dark:text-green-300'
+                    : result.status === 'failed'
+                      ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300'
+                      : 'border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-800/50 dark:bg-orange-900/20 dark:text-orange-300'
+                }`}>
                   {result.message}
                 </p>
               )}
+
               {result.output && (
-                <details>
-                  <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900">
-                    View Output
+                <details className="mt-4">
+                  <summary className="cursor-pointer select-none text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-100">
+                    Execution Output
                   </summary>
-                  <pre className="mt-2 bg-gray-50 dark:bg-gray-900 p-4 rounded border border-gray-200 dark:border-gray-700 overflow-auto text-xs text-gray-700 dark:text-gray-400">
+                  <pre className="mt-2 max-h-80 overflow-auto rounded-lg bg-slate-950 p-4 text-xs text-green-300 whitespace-pre-wrap break-words">
                     {result.output}
                   </pre>
                 </details>
               )}
-            </div>
+            </section>
           ))}
         </div>
       )}

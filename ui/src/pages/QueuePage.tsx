@@ -3,24 +3,14 @@ import { CheckCircle, ChevronDown, ChevronUp, Clock, ListOrdered, Loader2, PlayC
 import { queueApi } from '../services/api'
 import type { QueueItem } from '../types'
 
-function statusIcon(status: QueueItem['status']) {
-  switch (status) {
-    case 'queued':   return <Clock className="w-4 h-4 text-slate-400" />
-    case 'running':  return <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
-    case 'passed':   return <CheckCircle className="w-4 h-4 text-green-500" />
-    case 'failed':   return <XCircle className="w-4 h-4 text-red-500" />
-    case 'error':    return <XCircle className="w-4 h-4 text-orange-500" />
-  }
-}
-
 function statusBadge(status: QueueItem['status']) {
-  const base = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium'
+  const base = 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium'
   switch (status) {
-    case 'queued':  return <span className={`${base} bg-slate-100 text-slate-600`}>{statusIcon(status)} Queued</span>
-    case 'running': return <span className={`${base} bg-blue-50 text-blue-700`}>{statusIcon(status)} Running</span>
-    case 'passed':  return <span className={`${base} bg-green-50 text-green-700`}>{statusIcon(status)} Passed</span>
-    case 'failed':  return <span className={`${base} bg-red-50 text-red-700`}>{statusIcon(status)} Failed</span>
-    case 'error':   return <span className={`${base} bg-orange-50 text-orange-700`}>{statusIcon(status)} Error</span>
+    case 'queued':  return <span className={`${base} bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300`}><Clock className="h-3.5 w-3.5" /> Queued</span>
+    case 'running': return <span className={`${base} bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300`}><Loader2 className="h-3.5 w-3.5 animate-spin" /> Running</span>
+    case 'passed':  return <span className={`${base} bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300`}><CheckCircle className="h-3.5 w-3.5" /> Passed</span>
+    case 'failed':  return <span className={`${base} bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300`}><XCircle className="h-3.5 w-3.5" /> Failed</span>
+    case 'error':   return <span className={`${base} bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300`}><XCircle className="h-3.5 w-3.5" /> Error</span>
   }
 }
 
@@ -38,7 +28,6 @@ function ItemRow({ item, tick }: { item: QueueItem; tick: number }) {
   const [expanded, setExpanded] = useState(false)
   const isDone = !['queued', 'running'].includes(item.status)
 
-  // Auto-expand when item finishes
   const prevStatus = useRef(item.status)
   useEffect(() => {
     if (prevStatus.current === 'running' && isDone) setExpanded(true)
@@ -46,87 +35,82 @@ function ItemRow({ item, tick }: { item: QueueItem; tick: number }) {
   }, [item.status, isDone])
 
   return (
-    <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-      {/* Header row */}
+    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-center gap-4 p-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
             {statusBadge(item.status)}
-            <span className="font-medium text-slate-800 truncate">{item.testName || item.testId}</span>
+            <span className="truncate font-medium text-gray-900 dark:text-slate-100">{item.testName || item.testId}</span>
           </div>
-          <div className="flex flex-wrap gap-4 text-xs text-slate-400">
+          <div className="flex flex-wrap gap-4 text-xs text-gray-400 dark:text-slate-500">
             <span>#{item.id}</span>
             {item.startedAt && <span>⏱ {elapsed(item, tick)}</span>}
             {(item.scenarios ?? 0) > 0 && (
-              <span className={item.failed ? 'text-red-500 font-medium' : 'text-green-600 font-medium'}>
+              <span className={item.failed ? 'font-medium text-red-500 dark:text-red-400' : 'font-medium text-green-600 dark:text-green-400'}>
                 {item.passed}/{item.scenarios} scenarios{item.failed ? ` · ${item.failed} failed` : ' passed'}
               </span>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex shrink-0 items-center gap-2">
           {item.status === 'queued' && (
             <button
               onClick={() => queueApi.cancel(item.id).catch(() => {})}
-              className="text-slate-400 hover:text-red-500 transition-colors"
+              className="text-gray-400 transition-colors hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400"
               title="Cancel"
             >
-              <XCircle className="w-5 h-5" />
+              <XCircle className="h-5 w-5" />
             </button>
           )}
           {isDone && (
             <button
               onClick={() => setExpanded((v) => !v)}
-              className="text-slate-400 hover:text-slate-700 transition-colors"
+              className="text-gray-400 transition-colors hover:text-gray-700 dark:text-slate-500 dark:hover:text-slate-200"
               title={expanded ? 'Collapse' : 'Expand'}
             >
-              {expanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              {expanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
             </button>
           )}
         </div>
       </div>
 
-      {/* Expanded detail panel */}
       {expanded && isDone && (
-        <div className="border-t border-slate-100 bg-slate-50 p-4 space-y-4">
-          {/* Stats grid */}
+        <div className="space-y-4 border-t border-gray-100 bg-gray-50 p-4 dark:border-slate-800 dark:bg-slate-800/50">
           {(item.scenarios ?? 0) > 0 && (
             <div className="grid grid-cols-4 gap-3">
               {[
-                { label: 'Duration', value: item.duration ? `${item.duration}ms` : '—', color: 'text-slate-700' },
-                { label: 'Scenarios', value: item.scenarios ?? 0, color: 'text-slate-700' },
-                { label: 'Passed', value: item.passed ?? 0, color: 'text-green-700' },
-                { label: 'Failed', value: item.failed ?? 0, color: item.failed ? 'text-red-700 font-bold' : 'text-slate-400' },
+                { label: 'Duration', value: item.duration ? `${item.duration}ms` : '—', color: 'text-gray-900 dark:text-slate-100' },
+                { label: 'Scenarios', value: item.scenarios ?? 0, color: 'text-gray-900 dark:text-slate-100' },
+                { label: 'Passed', value: item.passed ?? 0, color: 'text-green-700 dark:text-green-400' },
+                { label: 'Failed', value: item.failed ?? 0, color: item.failed ? 'font-bold text-red-700 dark:text-red-400' : 'text-gray-400 dark:text-slate-500' },
               ].map(({ label, value, color }) => (
-                <div key={label} className="bg-white rounded-lg p-3 border border-slate-100 text-center">
-                  <p className="text-xs text-slate-400 mb-0.5">{label}</p>
-                  <p className={`text-lg font-semibold ${color}`}>{value}</p>
+                <div key={label} className="rounded-lg border border-gray-100 bg-white p-3 text-center dark:border-slate-700 dark:bg-slate-900">
+                  <p className="text-xs uppercase tracking-wide text-gray-400 dark:text-slate-500">{label}</p>
+                  <p className={`mt-0.5 text-lg font-semibold ${color}`}>{value}</p>
                 </div>
               ))}
             </div>
           )}
 
-          {/* Message */}
           {item.message && (
-            <div className={`p-3 rounded-lg border text-sm ${
+            <div className={`rounded-lg border p-3 text-sm ${
               item.status === 'passed'
-                ? 'bg-green-50 border-green-200 text-green-800'
+                ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-800/50 dark:bg-green-900/20 dark:text-green-300'
                 : item.status === 'failed'
-                  ? 'bg-red-50 border-red-200 text-red-800'
-                  : 'bg-orange-50 border-orange-200 text-orange-800'
+                  ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300'
+                  : 'border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-800/50 dark:bg-orange-900/20 dark:text-orange-300'
             }`}>
               {item.message}
             </div>
           )}
 
-          {/* Raw output */}
           {item.output && (
             <details open>
-              <summary className="cursor-pointer text-xs font-semibold text-slate-500 uppercase tracking-wide select-none mb-2">
+              <summary className="mb-2 cursor-pointer select-none text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-100">
                 Execution Output
               </summary>
-              <pre className="bg-slate-900 text-green-300 text-xs p-4 rounded-lg overflow-auto max-h-96 whitespace-pre-wrap break-words">
+              <pre className="max-h-96 overflow-auto rounded-lg bg-slate-950 p-4 text-xs text-green-300 whitespace-pre-wrap break-words">
                 {item.output}
               </pre>
             </details>
@@ -146,22 +130,19 @@ export default function QueuePage() {
   useEffect(() => {
     const es = new EventSource(queueApi.streamURL())
     esRef.current = es
-
     es.onopen = () => setConnected(true)
     es.onerror = () => setConnected(false)
-
     es.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data) as
           | { type: 'snapshot'; items: QueueItem[] }
           | { type: 'update'; item: QueueItem }
-
         if (msg.type === 'snapshot') {
           setItems(msg.items)
         } else if (msg.type === 'update') {
           setItems((prev) => {
             const idx = prev.findIndex((x) => x.id === msg.item.id)
-            if (idx === -1) return [...prev, msg.item]
+            if (idx === -1) return [msg.item, ...prev]
             const next = [...prev]
             next[idx] = msg.item
             return next
@@ -169,14 +150,9 @@ export default function QueuePage() {
         }
       } catch { /* ignore */ }
     }
-
-    return () => {
-      es.close()
-      setConnected(false)
-    }
+    return () => { es.close(); setConnected(false) }
   }, [])
 
-  // Live elapsed ticker for running items
   useEffect(() => {
     const hasRunning = items.some((i) => i.status === 'running')
     if (!hasRunning) return
@@ -187,38 +163,39 @@ export default function QueuePage() {
   const hasCompleted = items.some((i) => !['queued', 'running'].includes(i.status))
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-8 p-8">
+      <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
-          <ListOrdered className="w-7 h-7 text-indigo-600" />
+          <ListOrdered className="h-7 w-7 text-indigo-600 dark:text-indigo-400" />
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Execution Queue</h1>
-            <p className="text-sm text-slate-500">Live test run status — results appear automatically</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Execution Queue</h1>
+            <p className="text-sm text-gray-500 dark:text-slate-400">Live test run status — results appear automatically</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <span className={`flex items-center gap-1.5 text-xs font-medium ${connected ? 'text-green-600' : 'text-slate-400'}`}>
-            <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-slate-300'}`} />
+        <div className="flex shrink-0 items-center gap-3">
+          <span className={`flex items-center gap-1.5 text-xs font-medium ${connected ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-slate-500'}`}>
+            <span className={`h-2 w-2 rounded-full ${connected ? 'animate-pulse bg-green-500' : 'bg-gray-300 dark:bg-slate-600'}`} />
             {connected ? 'Live' : 'Disconnected'}
           </span>
 
           {hasCompleted && (
             <button
               onClick={() => queueApi.clearCompleted().catch(() => {})}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 hover:text-red-600 border border-slate-200 rounded-lg hover:border-red-200 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 transition-colors hover:border-red-200 hover:text-red-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-red-800 dark:hover:text-red-400"
             >
-              <Trash2 className="w-4 h-4" />
-              Clear completed
+              <Trash2 className="h-4 w-4" /> Clear completed
             </button>
           )}
         </div>
       </div>
 
       {items.length === 0 ? (
-        <div className="text-center py-16 text-slate-400">
-          <PlayCircle className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p className="text-sm">Queue is empty. Use the <strong>Queue</strong> button on any feature to run it.</p>
+        <div className="rounded-xl border border-gray-200 bg-white py-16 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <PlayCircle className="mx-auto mb-3 h-12 w-12 text-gray-200 dark:text-slate-700" />
+          <p className="text-sm text-gray-500 dark:text-slate-400">
+            Queue is empty. Use the <strong className="text-gray-700 dark:text-slate-300">Queue</strong> button on any feature to run it.
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
