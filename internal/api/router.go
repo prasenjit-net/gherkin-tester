@@ -51,6 +51,8 @@ func NewRouter(cfg config.Config, configFile string, logger *slog.Logger, build 
 		r.Delete("/projects/{projectID}", h.DeleteProject)
 		r.Get("/projects/{projectID}/git/status", h.GetGitStatus)
 		r.Post("/projects/{projectID}/git/commit", h.GitCommitPush)
+		r.Post("/projects/{projectID}/git/pull", h.GitPull)
+		r.Post("/projects/{projectID}/git/force-pull", h.GitForcePull)
 
 		// Karate version management
 		r.Get("/karate-versions", h.KarateVersionsList)

@@ -90,6 +90,10 @@ export const projectApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message }),
     })),
+  gitPull: async (projectID: string) =>
+    handleResponse<{ status: string }>(await fetch(`${API_BASE}/projects/${projectID}/git/pull`, { method: 'POST' })),
+  gitForcePull: async (projectID: string) =>
+    handleResponse<{ status: string }>(await fetch(`${API_BASE}/projects/${projectID}/git/force-pull`, { method: 'POST' })),
 }
 
 export const queueApi = {

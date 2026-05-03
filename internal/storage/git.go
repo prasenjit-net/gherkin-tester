@@ -210,6 +210,44 @@ func (s *Storage) GitCommitAndPush(projectID, message string) error {
 	return nil
 }
 
+// GitPull fetches and merges the latest changes from the tracked remote branch.
+func (s *Storage) GitPull(projectID string) error {
+	dir := s.projectDir(projectID)
+	if !isGitRepo(dir) {
+		return fmt.Errorf("project %s is not a git repository", projectID)
+	}
+	if out, err := runGit(dir, "pull", "--ff-only"); err != nil {
+		return fmt.Errorf("git pull failed: %w\n%s", err, out)
+	}
+	s.logger.Info("git pull", "project", projectID)
+	return nil
+}
+
+// GitForcePull discards all local changes and resets to the latest commit on
+// the tracked remote branch (fetch + hard reset).
+func (s *Storage) GitForcePull(projectID string) error {
+	dir := s.projectDir(projectID)
+	if !isGitRepo(dir) {
+		return fmt.Errorf("project %s is not a git repository", projectID)
+	}
+	if out, err := runGit(dir, "fetch", "origin"); err != nil {
+		return fmt.Errorf("git fetch failed: %w\n%s", err, out)
+	}
+	// Determine the remote tracking branch (e.g. origin/main)
+	branch, err := gitCurrentBranch(dir)
+	if err != nil {
+		return fmt.Errorf("could not determine branch: %w", err)
+	}
+	// Discard any local changes, then reset to remote
+	runGit(dir, "checkout", "--", ".") //nolint:errcheck – best-effort clean
+	remote := "origin/" + branch
+	if out, err := runGit(dir, "reset", "--hard", remote); err != nil {
+		return fmt.Errorf("git reset failed: %w\n%s", err, out)
+	}
+	s.logger.Info("git force pull", "project", projectID, "remote", remote)
+	return nil
+}
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 func isGitRepo(dir string) bool {

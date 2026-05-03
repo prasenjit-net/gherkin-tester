@@ -271,6 +271,24 @@ func (h *Handler) GitCommitPush(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]string{"status": "pushed"})
 }
 
+func (h *Handler) GitPull(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectID")
+	if err := h.storage.GitPull(projectID); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"status": "pulled"})
+}
+
+func (h *Handler) GitForcePull(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectID")
+	if err := h.storage.GitForcePull(projectID); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"status": "force-pulled"})
+}
+
 // ─── Test Endpoints (project-scoped) ────────────────────────────────────────
 
 func (h *Handler) CreateProjectTest(w http.ResponseWriter, r *http.Request) {

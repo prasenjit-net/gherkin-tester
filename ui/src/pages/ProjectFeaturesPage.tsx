@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowUpDown, ChevronRight, FilePlus, GitBranch, GitCommit, Loader2, ListOrdered, Pencil, RefreshCw, Save, Tag, Trash2 } from 'lucide-react'
+import { ArrowUpDown, ChevronRight, CloudDownload, FilePlus, GitBranch, GitCommit, Loader2, ListOrdered, Pencil, RefreshCw, Save, Tag, Trash2 } from 'lucide-react'
 import SectionHeader from '../components/SectionHeader'
 import { useToast } from '../components/Toast'
 import { karateApi, projectApi, queueApi } from '../services/api'
@@ -35,6 +35,7 @@ export default function ProjectFeaturesPage() {
   const [showCommitForm, setShowCommitForm] = useState(false)
   const [commitMsg, setCommitMsg] = useState('')
   const [pushing, setPushing] = useState(false)
+  const [pulling, setPulling] = useState(false)
 
   useEffect(() => {
     if (projectID) {
@@ -86,6 +87,33 @@ export default function ProjectFeaturesPage() {
       toast(err instanceof Error ? err.message : 'Git push failed', 'error')
     } finally {
       setPushing(false)
+    }
+  }
+
+  const handlePull = async () => {
+    setPulling(true)
+    try {
+      await projectApi.gitPull(projectID!)
+      toast('Pulled latest changes')
+      loadGitStatus()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Git pull failed', 'error')
+    } finally {
+      setPulling(false)
+    }
+  }
+
+  const handleForcePull = async () => {
+    if (!confirm('Force pull will discard ALL local changes and reset to the remote branch. Continue?')) return
+    setPulling(true)
+    try {
+      await projectApi.gitForcePull(projectID!)
+      toast('Force-pulled: local changes discarded')
+      loadGitStatus()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Force pull failed', 'error')
+    } finally {
+      setPulling(false)
     }
   }
 
@@ -263,13 +291,31 @@ export default function ProjectFeaturesPage() {
               <p className="text-xs text-gray-400 dark:text-slate-500 break-all">{project.gitUrl}</p>
 
               {!showCommitForm ? (
-                <button
-                  onClick={() => setShowCommitForm(true)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-purple-700"
-                >
-                  <GitCommit className="h-4 w-4" />
-                  Commit &amp; Push
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={handlePull}
+                    disabled={pulling}
+                    className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 shadow-sm transition-colors hover:bg-blue-100 disabled:opacity-60 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40"
+                  >
+                    {pulling ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />}
+                    {pulling ? 'Pulling…' : 'Pull'}
+                  </button>
+                  <button
+                    onClick={handleForcePull}
+                    disabled={pulling}
+                    className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 shadow-sm transition-colors hover:bg-amber-100 disabled:opacity-60 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400 dark:hover:bg-amber-900/40"
+                  >
+                    {pulling ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />}
+                    Force Pull
+                  </button>
+                  <button
+                    onClick={() => setShowCommitForm(true)}
+                    className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-purple-700"
+                  >
+                    <GitCommit className="h-4 w-4" />
+                    Commit &amp; Push
+                  </button>
+                </div>
               ) : (
                 <form onSubmit={handleCommitPush} className="flex items-center gap-3">
                   <input
