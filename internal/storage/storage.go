@@ -112,7 +112,32 @@ if v.Version != version {
 filtered = append(filtered, v)
 }
 }
-return s.saveVersions(filtered)
+if err := s.saveVersions(filtered); err != nil {
+return err
+}
+
+// Delete the JAR file if it exists.
+jarPath := s.KarateJARPath(version)
+if err := os.Remove(jarPath); err != nil && !os.IsNotExist(err) {
+s.logger.Warn("failed to delete karate jar", "version", version, "path", jarPath, "error", err)
+}
+
+// Clear this version from any project that had it explicitly set.
+projects, err := s.ListProjects()
+if err != nil {
+s.logger.Warn("could not list projects to clear karate version", "error", err)
+return nil
+}
+for i := range projects {
+if projects[i].KarateVersion == version {
+projects[i].KarateVersion = ""
+if err := s.UpdateProject(&projects[i]); err != nil {
+s.logger.Warn("failed to clear karate version from project", "project", projects[i].ID, "error", err)
+}
+}
+}
+
+return nil
 }
 
 // LatestKarateVersion returns the most recently added version, or "" if none configured.
