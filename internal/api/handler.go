@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/prasenjit-net/gherkin-tester/internal/config"
+	"github.com/prasenjit-net/gherkin-tester/internal/events"
 	"github.com/prasenjit-net/gherkin-tester/internal/queue"
 	"github.com/prasenjit-net/gherkin-tester/internal/storage"
 	"github.com/prasenjit-net/gherkin-tester/internal/testclient"
@@ -16,11 +17,12 @@ import (
 
 type Handler struct {
 	config     config.Config
-	configFile string // path to config.yaml on disk; empty if none found at startup
+	configFile string
 	version    version.Info
 	storage    *storage.Storage
 	executor   testclient.Executor
 	queue      *queue.Queue
+	bus        *events.Bus
 }
 
 type healthResponse struct {
@@ -50,8 +52,15 @@ type metaResponse struct {
 	Version     version.Info `json:"version"`
 }
 
-func NewHandler(cfg config.Config, configFile string, build version.Info, st *storage.Storage, exec testclient.Executor, q *queue.Queue) *Handler {
-	return &Handler{config: cfg, configFile: configFile, version: build, storage: st, executor: exec, queue: q}
+func NewHandler(cfg config.Config, configFile string, build version.Info, st *storage.Storage, exec testclient.Executor, q *queue.Queue, bus *events.Bus) *Handler {
+	return &Handler{config: cfg, configFile: configFile, version: build, storage: st, executor: exec, queue: q, bus: bus}
+}
+
+// EventStream proxies to the global event bus SSE handler.
+func (h *Handler) EventStream(w http.ResponseWriter, r *http.Request) {
+	// Send a queue.snapshot immediately so the client has initial state.
+	h.bus.Publish("queue.snapshot", map[string]any{"items": h.queue.Items()})
+	h.bus.ServeSSE(w, r)
 }
 
 
@@ -500,10 +509,6 @@ func (h *Handler) QueueClear(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]string{"status": "cleared"})
 }
 
-func (h *Handler) QueueStream(w http.ResponseWriter, r *http.Request) {
-	h.queue.ServeSSE(w, r)
-}
-
 // ─── Karate version handlers ─────────────────────────────────────────────────
 
 func (h *Handler) KarateVersionsList(w http.ResponseWriter, r *http.Request) {
@@ -530,22 +535,29 @@ func (h *Handler) KarateVersionsAdd(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	// Kick off download in background
-	go func() {
-		jarPath := h.storage.KarateJARPath(body.Version)
-		if _, err := storage.StatFile(jarPath); err != nil {
-			_ = storage.DownloadKarateJAR(body.Version, jarPath, h.storage.Logger())
+	// Kick off download in background, publishing progress events to the bus.
+	go func(ver string) {
+		jarPath := h.storage.KarateJARPath(ver)
+		if _, err := storage.StatFile(jarPath); err == nil {
+			return // already downloaded
 		}
-	}()
+		h.bus.Publish("karate.download.started", map[string]string{"version": ver})
+		if err := storage.DownloadKarateJAR(ver, jarPath, h.storage.Logger()); err != nil {
+			h.bus.Publish("karate.download.error", map[string]string{"version": ver, "error": err.Error()})
+		} else {
+			h.bus.Publish("karate.download.complete", map[string]string{"version": ver})
+		}
+	}(body.Version)
 	respondJSON(w, http.StatusCreated, map[string]string{"version": body.Version, "status": "added"})
 }
 
 func (h *Handler) KarateVersionsRemove(w http.ResponseWriter, r *http.Request) {
-	version := chi.URLParam(r, "version")
-	if err := h.storage.RemoveKarateVersion(version); err != nil {
+	ver := chi.URLParam(r, "version")
+	if err := h.storage.RemoveKarateVersion(ver); err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.bus.Publish("karate.version.removed", map[string]string{"version": ver})
 	respondJSON(w, http.StatusOK, map[string]string{"status": "removed"})
 }
 

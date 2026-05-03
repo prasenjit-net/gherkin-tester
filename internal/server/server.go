@@ -16,6 +16,7 @@ import (
 
 	"github.com/prasenjit-net/gherkin-tester/internal/api"
 	"github.com/prasenjit-net/gherkin-tester/internal/config"
+	"github.com/prasenjit-net/gherkin-tester/internal/events"
 	"github.com/prasenjit-net/gherkin-tester/internal/queue"
 	"github.com/prasenjit-net/gherkin-tester/internal/storage"
 	"github.com/prasenjit-net/gherkin-tester/internal/testclient"
@@ -36,6 +37,7 @@ type App struct {
 	storage  *storage.Storage
 	executor testclient.Executor
 	queue    *queue.Queue
+	bus      *events.Bus
 }
 
 func New(cfg config.Config, logger *slog.Logger, build version.Info, options Options) (*App, error) {
@@ -53,10 +55,12 @@ func New(cfg config.Config, logger *slog.Logger, build version.Info, options Opt
 		return nil, fmt.Errorf("init executor: %w", err)
 	}
 
-	q := queue.New(executor, executorFactory, st, logger)
+	bus := events.New()
+
+	q := queue.New(executor, executorFactory, st, logger, bus)
 
 	// Download any missing JARs for configured karate versions in the background.
-	go st.EnsureJARsDownloaded(logger)
+	go st.EnsureJARsDownloaded(logger, bus.Publish)
 
 	return &App{
 		cfg:      cfg,
@@ -66,6 +70,7 @@ func New(cfg config.Config, logger *slog.Logger, build version.Info, options Opt
 		storage:  st,
 		executor: executor,
 		queue:    q,
+		bus:      bus,
 	}, nil
 }
 
@@ -77,7 +82,7 @@ func (a *App) Handler() http.Handler {
 	r.Use(middleware.Heartbeat("/livez"))
 	r.Use(requestLogger(a.logger))
 
-	r.Mount("/api", api.NewRouter(a.cfg, a.options.ConfigFile, a.logger, a.build, a.storage, a.executor, a.queue))
+	r.Mount("/api", api.NewRouter(a.cfg, a.options.ConfigFile, a.logger, a.build, a.storage, a.executor, a.queue, a.bus))
 
 	if a.options.DevMode && strings.TrimSpace(a.cfg.UI.DevProxyURL) != "" {
 		r.Handle("/*", newDevProxy(a.cfg.UI.DevProxyURL, a.logger))

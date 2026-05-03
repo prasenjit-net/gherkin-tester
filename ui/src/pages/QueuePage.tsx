@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { CheckCircle, ChevronDown, ChevronUp, Clock, ListOrdered, Loader2, PlayCircle, Trash2, XCircle } from 'lucide-react'
 import { queueApi } from '../services/api'
+import { useEventBus } from '../hooks/useEventBus'
 import type { QueueItem } from '../types'
 
 function statusBadge(status: QueueItem['status']) {
@@ -123,35 +124,27 @@ function ItemRow({ item, tick }: { item: QueueItem; tick: number }) {
 
 export default function QueuePage() {
   const [items, setItems] = useState<QueueItem[]>([])
-  const [connected, setConnected] = useState(false)
   const [tick, setTick] = useState(0)
-  const esRef = useRef<EventSource | null>(null)
+  const { connected, on } = useEventBus()
 
+  // Fetch initial queue state, then keep in sync via SSE.
   useEffect(() => {
-    const es = new EventSource(queueApi.streamURL())
-    esRef.current = es
-    es.onopen = () => setConnected(true)
-    es.onerror = () => setConnected(false)
-    es.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data) as
-          | { type: 'snapshot'; items: QueueItem[] }
-          | { type: 'update'; item: QueueItem }
-        if (msg.type === 'snapshot') {
-          setItems(msg.items)
-        } else if (msg.type === 'update') {
-          setItems((prev) => {
-            const idx = prev.findIndex((x) => x.id === msg.item.id)
-            if (idx === -1) return [msg.item, ...prev]
-            const next = [...prev]
-            next[idx] = msg.item
-            return next
-          })
-        }
-      } catch { /* ignore */ }
-    }
-    return () => { es.close(); setConnected(false) }
+    queueApi.list().then(setItems).catch(() => {})
   }, [])
+
+  useEffect(() => on<{ items: QueueItem[] }>('queue.snapshot', (e) => {
+    setItems(e.payload.items)
+  }), [on])
+
+  useEffect(() => on<QueueItem>('queue.update', (e) => {
+    setItems((prev) => {
+      const idx = prev.findIndex((x) => x.id === e.payload.id)
+      if (idx === -1) return [e.payload, ...prev]
+      const next = [...prev]
+      next[idx] = e.payload
+      return next
+    })
+  }), [on])
 
   useEffect(() => {
     const hasRunning = items.some((i) => i.status === 'running')

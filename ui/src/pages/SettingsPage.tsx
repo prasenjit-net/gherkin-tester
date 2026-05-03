@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Download, Plus, Save, Trash2 } from 'lucide-react'
 import SectionHeader from '../components/SectionHeader'
 import { configApi, karateApi, metaApi } from '../services/api'
+import { useEventBus } from '../hooks/useEventBus'
 import type { AppConfig, KarateVersion } from '../types'
 
 export default function SettingsPage() {
@@ -21,14 +22,34 @@ export default function SettingsPage() {
   const [selectedRelease, setSelectedRelease] = useState('')
   const [loadingReleases, setLoadingReleases] = useState(false)
   const [adding, setAdding] = useState(false)
-  const [statusMap, setStatusMap] = useState<Record<string, boolean>>({})
+  // true = downloaded, false = downloading, undefined = unknown
+  const [statusMap, setStatusMap] = useState<Record<string, boolean | undefined>>({})
   const [karateError, setKarateError] = useState<string | null>(null)
+
+  // ── Global event bus ──────────────────────────────────────────────────────────
+  const { on } = useEventBus()
 
   useEffect(() => {
     metaApi.get().then(setMeta).catch(() => {})
     loadVersions()
     configApi.get().then((c) => { setCfg(c); setCfgForm(c) }).catch(() => {})
   }, [])
+
+  // Listen for karate download events to update status badges in real-time.
+  useEffect(() => on<{ version: string }>('karate.download.started', (e) => {
+    setStatusMap((m) => ({ ...m, [e.payload.version]: false }))
+  }), [on])
+  useEffect(() => on<{ version: string }>('karate.download.complete', (e) => {
+    setStatusMap((m) => ({ ...m, [e.payload.version]: true }))
+  }), [on])
+  useEffect(() => on<{ version: string }>('karate.download.error', (e) => {
+    setStatusMap((m) => { const next = { ...m }; delete next[e.payload.version]; return next })
+    setKarateError(`Download failed for ${e.payload.version}`)
+  }), [on])
+  useEffect(() => on<{ version: string }>('karate.version.removed', (e) => {
+    setVersions((vs) => vs.filter((v) => v.version !== e.payload.version))
+    setStatusMap((m) => { const next = { ...m }; delete next[e.payload.version]; return next })
+  }), [on])
 
   // ── Config handlers ──────────────────────────────────────────────────────────
   const handleCfgChange = (field: keyof AppConfig, value: string | number) => {

@@ -9,19 +9,21 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/prasenjit-net/gherkin-tester/internal/config"
+	"github.com/prasenjit-net/gherkin-tester/internal/events"
 	"github.com/prasenjit-net/gherkin-tester/internal/queue"
 	"github.com/prasenjit-net/gherkin-tester/internal/storage"
 	"github.com/prasenjit-net/gherkin-tester/internal/testclient"
 	"github.com/prasenjit-net/gherkin-tester/internal/version"
 )
 
-func NewRouter(cfg config.Config, configFile string, logger *slog.Logger, build version.Info, st *storage.Storage, exec testclient.Executor, q *queue.Queue) http.Handler {
+func NewRouter(cfg config.Config, configFile string, logger *slog.Logger, build version.Info, st *storage.Storage, exec testclient.Executor, q *queue.Queue, bus *events.Bus) http.Handler {
 	r := chi.NewRouter()
 
-	h := NewHandler(cfg, configFile, build, st, exec, q)
+	h := NewHandler(cfg, configFile, build, st, exec, q, bus)
 
-	// SSE endpoint must NOT be under the timeout middleware
-	r.Get("/queue/stream", h.QueueStream)
+	// SSE endpoints must NOT be under the timeout middleware
+	r.Get("/events/stream", h.EventStream)
+	r.Get("/queue/stream", h.EventStream) // backward-compat alias
 
 	// All other routes run under the 30-second request timeout
 	r.Group(func(r chi.Router) {

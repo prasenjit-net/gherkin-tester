@@ -1,14 +1,13 @@
 package queue
 
 import (
-	"encoding/json"
+	"sort"
 	"fmt"
 	"log/slog"
-	"net/http"
-	"sort"
 	"sync"
 	"time"
 
+	"github.com/prasenjit-net/gherkin-tester/internal/events"
 	"github.com/prasenjit-net/gherkin-tester/internal/storage"
 	"github.com/prasenjit-net/gherkin-tester/internal/testclient"
 )
@@ -48,17 +47,17 @@ type Queue struct {
 	execFactory *testclient.ExecutorFactory
 	st          *storage.Storage
 	log         *slog.Logger
-	clients     map[chan []byte]struct{}
+	bus         *events.Bus
 	work        chan struct{}
 }
 
-func New(exec testclient.Executor, execFactory *testclient.ExecutorFactory, st *storage.Storage, log *slog.Logger) *Queue {
+func New(exec testclient.Executor, execFactory *testclient.ExecutorFactory, st *storage.Storage, log *slog.Logger, bus *events.Bus) *Queue {
 	q := &Queue{
 		exec:        exec,
 		execFactory: execFactory,
 		st:          st,
 		log:         log,
-		clients:     make(map[chan []byte]struct{}),
+		bus:         bus,
 		work:        make(chan struct{}, 256),
 	}
 	q.loadHistory()
@@ -183,65 +182,6 @@ func (q *Queue) ClearCompleted() {
 	q.broadcastSnapshot()
 }
 
-// ServeSSE streams queue updates to a connected HTTP client via Server-Sent Events.
-func (q *Queue) ServeSSE(w http.ResponseWriter, r *http.Request) {
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "streaming not supported", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-
-	ch := make(chan []byte, 64)
-
-	// Register client and take snapshot atomically, without calling Items()
-	// (which would deadlock by trying to re-acquire the same mutex).
-	q.mu.Lock()
-	q.clients[ch] = struct{}{}
-	snapshot := make([]Item, len(q.items))
-	for i, it := range q.items {
-		snapshot[i] = *it
-	}
-	q.mu.Unlock()
-	sort.Slice(snapshot, func(i, j int) bool {
-		return snapshot[i].QueuedAt.After(snapshot[j].QueuedAt)
-	})
-
-	// Send initial snapshot
-	if data, err := json.Marshal(map[string]any{"type": "snapshot", "items": snapshot}); err == nil {
-		fmt.Fprintf(w, "data: %s\n\n", data)
-		flusher.Flush()
-	}
-
-	defer func() {
-		q.mu.Lock()
-		delete(q.clients, ch)
-		q.mu.Unlock()
-	}()
-
-	ticker := time.NewTicker(15 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-r.Context().Done():
-			return
-		case <-ticker.C:
-			fmt.Fprintf(w, ": ping\n\n")
-			flusher.Flush()
-		case data, ok := <-ch:
-			if !ok {
-				return
-			}
-			fmt.Fprintf(w, "data: %s\n\n", data)
-			flusher.Flush()
-		}
-	}
-}
-
 // ─── internal ─────────────────────────────────────────────────────────────────
 
 func (q *Queue) signal() {
@@ -359,40 +299,10 @@ func (q *Queue) resolveExecutor(projectID string) testclient.Executor {
 func (q *Queue) broadcastItem(item *Item) {
 	q.mu.Lock()
 	itemCopy := *item
-	clients := make([]chan []byte, 0, len(q.clients))
-	for ch := range q.clients {
-		clients = append(clients, ch)
-	}
 	q.mu.Unlock()
-
-	data, err := json.Marshal(map[string]any{"type": "update", "item": itemCopy})
-	if err != nil {
-		return
-	}
-	for _, ch := range clients {
-		select {
-		case ch <- data:
-		default:
-		}
-	}
+	q.bus.Publish("queue.update", itemCopy)
 }
 
 func (q *Queue) broadcastSnapshot() {
-	items := q.Items()
-	data, err := json.Marshal(map[string]any{"type": "snapshot", "items": items})
-	if err != nil {
-		return
-	}
-	q.mu.Lock()
-	clients := make([]chan []byte, 0, len(q.clients))
-	for ch := range q.clients {
-		clients = append(clients, ch)
-	}
-	q.mu.Unlock()
-	for _, ch := range clients {
-		select {
-		case ch <- data:
-		default:
-		}
-	}
+	q.bus.Publish("queue.snapshot", map[string]any{"items": q.Items()})
 }

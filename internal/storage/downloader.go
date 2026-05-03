@@ -96,7 +96,8 @@ func DownloadKarateJAR(version, destPath string, logger *slog.Logger) error {
 
 // EnsureJARsDownloaded downloads any missing JARs for configured versions.
 // Runs in the background; errors are logged but not fatal.
-func (s *Storage) EnsureJARsDownloaded(logger *slog.Logger) {
+// publish is an optional callback to emit events; pass nil to skip.
+func (s *Storage) EnsureJARsDownloaded(logger *slog.Logger, publish func(string, any)) {
 	versions, err := s.ListKarateVersions()
 	if err != nil || len(versions) == 0 {
 		return
@@ -106,8 +107,16 @@ func (s *Storage) EnsureJARsDownloaded(logger *slog.Logger) {
 		if _, err := os.Stat(jarPath); err == nil {
 			continue // already exists
 		}
+		if publish != nil {
+			publish("karate.download.started", map[string]string{"version": v.Version})
+		}
 		if err := DownloadKarateJAR(v.Version, jarPath, logger); err != nil {
 			logger.Error("failed to download karate JAR", "version", v.Version, "error", err)
+			if publish != nil {
+				publish("karate.download.error", map[string]string{"version": v.Version, "error": err.Error()})
+			}
+		} else if publish != nil {
+			publish("karate.download.complete", map[string]string{"version": v.Version})
 		}
 	}
 }
