@@ -263,6 +263,12 @@ func (q *Queue) processOne() bool {
 		result.TestName = item.TestName
 		if err := q.st.SaveTestResult(result); err != nil {
 			q.log.Error("queue: failed to save result", "error", err)
+		} else {
+			// Sync item.ID to the on-disk execution directory name so that
+			// ClearCompleted can find and delete the correct directory.
+			q.mu.Lock()
+			item.ID = result.ID
+			q.mu.Unlock()
 		}
 	}
 
