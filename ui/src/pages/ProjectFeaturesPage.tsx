@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ChevronRight, FilePlus, ListOrdered, Pencil, Plus, Tag, Trash2 } from 'lucide-react'
+import { ChevronRight, FilePlus, ListOrdered, Pencil, Save, Tag, Trash2 } from 'lucide-react'
 import SectionHeader from '../components/SectionHeader'
 import { useToast } from '../components/Toast'
-import { projectApi, queueApi } from '../services/api'
-import type { Project, Test } from '../types'
+import { karateApi, projectApi, queueApi } from '../services/api'
+import type { KarateVersion, Project, Test } from '../types'
 
 const inputCls =
   'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500'
@@ -16,10 +16,25 @@ export default function ProjectFeaturesPage() {
   const [tests, setTests] = useState<Test[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Project detail editing
+  const [editName, setEditName] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editKarateVersion, setEditKarateVersion] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [karateVersions, setKarateVersions] = useState<KarateVersion[]>([])
+
+  // New feature form
   const [showNewForm, setShowNewForm] = useState(false)
   const [newTest, setNewTest] = useState({ id: '', name: '', description: '', tags: '' })
 
-  useEffect(() => { if (projectID) loadAll() }, [projectID])
+  useEffect(() => {
+    if (projectID) {
+      loadAll()
+      karateApi.listVersions().then(setKarateVersions).catch(() => {})
+    }
+  }, [projectID])
 
   const loadAll = async () => {
     try {
@@ -27,11 +42,35 @@ export default function ProjectFeaturesPage() {
       setError(null)
       const [proj, feats] = await Promise.all([projectApi.get(projectID!), projectApi.listTests(projectID!)])
       setProject(proj)
+      setEditName(proj.name)
+      setEditDescription(proj.description)
+      setEditKarateVersion(proj.karateVersion ?? '')
       setTests(feats)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load project')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleSaveProject = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editName.trim()) { setError('Project name is required'); return }
+    setSaving(true)
+    setError(null)
+    try {
+      const updated = await projectApi.update(projectID!, {
+        name: editName,
+        description: editDescription,
+        karateVersion: editKarateVersion,
+      })
+      setProject(updated)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save project')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -73,19 +112,10 @@ export default function ProjectFeaturesPage() {
         <span className="font-medium text-gray-800 dark:text-slate-200">{project?.name ?? projectID}</span>
       </nav>
 
-      <div className="flex items-start justify-between gap-4">
-        <SectionHeader
-          title={project?.name ?? 'Features'}
-          description={project?.description || 'Manage Karate feature files for this project.'}
-        />
-        <button
-          onClick={() => setShowNewForm((v) => !v)}
-          className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <Plus className="h-4 w-4" />
-          {showNewForm ? 'Cancel' : 'New Feature'}
-        </button>
-      </div>
+      <SectionHeader
+        title={project?.name ?? 'Project'}
+        description="Edit project settings and manage Karate feature files."
+      />
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300">
@@ -93,32 +123,112 @@ export default function ProjectFeaturesPage() {
         </div>
       )}
 
+      {/* ── Project details card ── */}
+      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <h2 className="mb-4 text-base font-semibold text-gray-900 dark:text-slate-100">Project Settings</h2>
+        <form onSubmit={handleSaveProject} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">
+                Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className={inputCls}
+                placeholder="Project name"
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">
+                Karate Version{' '}
+                <span className="font-normal text-gray-400 dark:text-slate-500">
+                  (blank = latest{karateVersions[0] ? ` · ${karateVersions[0].version}` : ''})
+                </span>
+              </label>
+              <select
+                value={editKarateVersion}
+                onChange={(e) => setEditKarateVersion(e.target.value)}
+                className={inputCls}
+              >
+                <option value="">Use latest</option>
+                {karateVersions.map((v) => (
+                  <option key={v.version} value={v.version}>{v.version}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Description</label>
+            <textarea
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              className={inputCls}
+              rows={2}
+              placeholder="What APIs or services does this project test?"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-60"
+          >
+            <Save className="h-4 w-4" />
+            {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save Changes'}
+          </button>
+        </form>
+      </section>
+
+      {/* ── Features section ── */}
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100">
+          Feature Files
+          {tests.length > 0 && (
+            <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-normal text-gray-500 dark:bg-slate-800 dark:text-slate-400">
+              {tests.length}
+            </span>
+          )}
+        </h2>
+        <button
+          onClick={() => setShowNewForm((v) => !v)}
+          className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700"
+        >
+          {showNewForm ? 'Cancel' : '+ New Feature'}
+        </button>
+      </div>
+
       {showNewForm && (
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <h2 className="mb-4 text-base font-semibold text-gray-900 dark:text-slate-100">New Feature</h2>
+          <h3 className="mb-4 text-sm font-semibold text-gray-900 dark:text-slate-100">New Feature File</h3>
           <form onSubmit={handleCreate} className="space-y-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">
-                Feature ID <span className="font-normal text-gray-400 dark:text-slate-500">(optional)</span>
-              </label>
-              <input type="text" value={newTest.id} onChange={(e) => setNewTest({ ...newTest, id: e.target.value })} className={inputCls} placeholder="e.g., login-feature" />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">
+                  Feature ID <span className="font-normal text-gray-400 dark:text-slate-500">(optional)</span>
+                </label>
+                <input type="text" value={newTest.id} onChange={(e) => setNewTest({ ...newTest, id: e.target.value })} className={inputCls} placeholder="e.g., login-feature" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Name <span className="text-red-500">*</span></label>
+                <input type="text" value={newTest.name} onChange={(e) => setNewTest({ ...newTest, name: e.target.value })} className={inputCls} placeholder="Feature name" required />
+              </div>
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Name <span className="text-red-500">*</span></label>
-              <input type="text" value={newTest.name} onChange={(e) => setNewTest({ ...newTest, name: e.target.value })} className={inputCls} placeholder="Feature name" required />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Description</label>
-              <textarea value={newTest.description} onChange={(e) => setNewTest({ ...newTest, description: e.target.value })} className={inputCls} rows={2} />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">
-                Tags <span className="font-normal text-gray-400 dark:text-slate-500">(comma-separated)</span>
-              </label>
-              <input type="text" value={newTest.tags} onChange={(e) => setNewTest({ ...newTest, tags: e.target.value })} className={inputCls} placeholder="e.g., smoke, regression" />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Description</label>
+                <input type="text" value={newTest.description} onChange={(e) => setNewTest({ ...newTest, description: e.target.value })} className={inputCls} placeholder="Optional description" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">
+                  Tags <span className="font-normal text-gray-400 dark:text-slate-500">(comma-separated)</span>
+                </label>
+                <input type="text" value={newTest.tags} onChange={(e) => setNewTest({ ...newTest, tags: e.target.value })} className={inputCls} placeholder="e.g., smoke, regression" />
+              </div>
             </div>
             <button type="submit" className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700">
-              <Plus className="h-4 w-4" /> Create Feature
+              Create Feature
             </button>
           </form>
         </section>
@@ -128,10 +238,10 @@ export default function ProjectFeaturesPage() {
         <div className="rounded-xl border border-gray-200 bg-white py-16 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <FilePlus className="mx-auto mb-3 h-10 w-10 text-gray-300 dark:text-slate-700" />
           <p className="text-base font-medium text-gray-700 dark:text-slate-300">No feature files yet</p>
-          <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Create or upload a Karate .feature file to get started.</p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Create a Karate .feature file to get started.</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {tests.map((test) => (
             <div key={test.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
               <div className="flex items-start justify-between gap-4">
@@ -140,7 +250,6 @@ export default function ProjectFeaturesPage() {
                     <Link
                       to={`/projects/${projectID}/features/${test.id}/edit`}
                       className="hover:text-blue-600 dark:hover:text-blue-400"
-                      onClick={(e) => e.stopPropagation()}
                     >
                       {test.name}
                     </Link>
