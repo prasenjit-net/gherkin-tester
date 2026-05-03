@@ -15,10 +15,10 @@ import (
 	"github.com/prasenjit-net/gherkin-tester/internal/version"
 )
 
-func NewRouter(cfg config.Config, logger *slog.Logger, build version.Info, st *storage.Storage, exec testclient.Executor, q *queue.Queue) http.Handler {
+func NewRouter(cfg config.Config, configFile string, logger *slog.Logger, build version.Info, st *storage.Storage, exec testclient.Executor, q *queue.Queue) http.Handler {
 	r := chi.NewRouter()
 
-	h := NewHandler(cfg, build, st, exec, q)
+	h := NewHandler(cfg, configFile, build, st, exec, q)
 
 	// SSE endpoint must NOT be under the timeout middleware
 	r.Get("/queue/stream", h.QueueStream)
@@ -30,6 +30,8 @@ func NewRouter(cfg config.Config, logger *slog.Logger, build version.Info, st *s
 		r.Get("/health", h.Health)
 		r.Get("/example", h.Example)
 		r.Get("/meta", h.Meta)
+		r.Get("/config", h.GetConfig)
+		r.Put("/config", h.UpdateConfig)
 
 		// Queue management
 		r.Get("/queue", h.QueueList)

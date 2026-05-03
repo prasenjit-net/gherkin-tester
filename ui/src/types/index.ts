@@ -47,6 +47,19 @@ export interface KarateVersion {
   addedAt: string
 }
 
+export interface AppConfig {
+  appName: string
+  appDescription: string
+  appURL: string
+  appEnv: string
+  serverPort: number
+  logLevel: string
+  logFormat: string
+  dataDir: string
+  maxExecutors: number
+  configFile: string
+}
+
 export interface Test {
   id: string
   projectId: string

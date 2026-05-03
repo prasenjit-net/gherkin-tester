@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
+	"go.yaml.in/yaml/v3"
 )
 
 type Config struct {
@@ -153,6 +154,25 @@ func InitProject(dir string, force bool) error {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// WriteConfig marshals cfg to YAML and writes it to filePath.
+// If filePath is empty, it defaults to "config.yaml" in the current directory.
+func WriteConfig(cfg Config, filePath string) error {
+	if filePath == "" {
+		filePath = "config.yaml"
+	}
+
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(filePath, data, 0o644); err != nil {
+		return fmt.Errorf("write config file: %w", err)
+	}
+
+	return nil
 }
 
 const DefaultConfigYAML = `app:

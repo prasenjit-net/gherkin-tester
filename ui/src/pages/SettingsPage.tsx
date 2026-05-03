@@ -1,24 +1,60 @@
 import { useEffect, useState } from 'react'
-import { Download, Plus, Trash2 } from 'lucide-react'
+import { Download, Plus, Save, Trash2 } from 'lucide-react'
 import SectionHeader from '../components/SectionHeader'
-import { karateApi, metaApi } from '../services/api'
-import type { KarateVersion } from '../types'
+import { configApi, karateApi, metaApi } from '../services/api'
+import type { AppConfig, KarateVersion } from '../types'
 
 export default function SettingsPage() {
+  // ── App config ──────────────────────────────────────────────────────────────
+  const [cfg, setCfg] = useState<AppConfig | null>(null)
+  const [cfgForm, setCfgForm] = useState<AppConfig | null>(null)
+  const [savingCfg, setSavingCfg] = useState(false)
+  const [cfgSaved, setCfgSaved] = useState(false)
+  const [cfgError, setCfgError] = useState<string | null>(null)
+
+  // ── App meta ─────────────────────────────────────────────────────────────────
   const [meta, setMeta] = useState<Awaited<ReturnType<typeof metaApi.get>> | null>(null)
+
+  // ── Karate versions ──────────────────────────────────────────────────────────
   const [versions, setVersions] = useState<KarateVersion[]>([])
   const [releases, setReleases] = useState<string[]>([])
   const [selectedRelease, setSelectedRelease] = useState('')
   const [loadingReleases, setLoadingReleases] = useState(false)
   const [adding, setAdding] = useState(false)
   const [statusMap, setStatusMap] = useState<Record<string, boolean>>({})
-  const [error, setError] = useState<string | null>(null)
+  const [karateError, setKarateError] = useState<string | null>(null)
 
   useEffect(() => {
     metaApi.get().then(setMeta).catch(() => {})
     loadVersions()
+    configApi.get().then((c) => { setCfg(c); setCfgForm(c) }).catch(() => {})
   }, [])
 
+  // ── Config handlers ──────────────────────────────────────────────────────────
+  const handleCfgChange = (field: keyof AppConfig, value: string | number) => {
+    setCfgForm((f) => f ? { ...f, [field]: value } : f)
+  }
+
+  const handleSaveCfg = async () => {
+    if (!cfgForm) return
+    setSavingCfg(true)
+    setCfgError(null)
+    try {
+      const res = await configApi.update(cfgForm)
+      setCfg({ ...cfgForm, configFile: res.configFile })
+      setCfgForm((f) => f ? { ...f, configFile: res.configFile } : f)
+      setCfgSaved(true)
+      setTimeout(() => setCfgSaved(false), 2500)
+    } catch (e) {
+      setCfgError(e instanceof Error ? e.message : 'Failed to save settings')
+    } finally {
+      setSavingCfg(false)
+    }
+  }
+
+  const handleReload = () => window.location.reload()
+
+  // ── Karate handlers ──────────────────────────────────────────────────────────
   const loadVersions = async () => {
     try {
       const vs = await karateApi.listVersions()
@@ -30,67 +66,177 @@ export default function SettingsPage() {
         } catch {}
       })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load versions')
+      setKarateError(e instanceof Error ? e.message : 'Failed to load versions')
     }
   }
 
   const loadReleases = async () => {
     setLoadingReleases(true)
-    setError(null)
+    setKarateError(null)
     try {
       const rs = await karateApi.fetchReleases()
       setReleases(rs)
       if (rs.length > 0) setSelectedRelease(rs[0])
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to fetch GitHub releases')
+      setKarateError(e instanceof Error ? e.message : 'Failed to fetch GitHub releases')
     } finally {
       setLoadingReleases(false)
     }
   }
 
-  const handleAdd = async () => {
+  const handleAddVersion = async () => {
     if (!selectedRelease) return
     setAdding(true)
-    setError(null)
+    setKarateError(null)
     try {
       await karateApi.addVersion(selectedRelease)
       await loadVersions()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to add version')
+      setKarateError(e instanceof Error ? e.message : 'Failed to add version')
     } finally {
       setAdding(false)
     }
   }
 
-  const handleRemove = async (version: string) => {
+  const handleRemoveVersion = async (version: string) => {
     if (!confirm(`Remove Karate ${version}? The JAR file on disk will not be deleted.`)) return
     try {
       await karateApi.removeVersion(version)
       loadVersions()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to remove version')
+      setKarateError(e instanceof Error ? e.message : 'Failed to remove version')
     }
   }
 
+  // ── Shared styles ────────────────────────────────────────────────────────────
+  const inputCls = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100'
   const selectCls = 'rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100'
+  const labelCls = 'block text-xs font-medium text-gray-500 mb-1 dark:text-slate-400'
 
   return (
     <div className="space-y-8 p-8">
-      <SectionHeader title="Settings" description="Manage Karate versions and view application metadata." />
+      <SectionHeader title="Settings" description="Manage application configuration and Karate versions." />
 
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300">
-          {error}
-        </div>
-      )}
+      {/* ── App Settings ────────────────────────────────────────────────────── */}
+      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <h2 className="mb-1 text-base font-semibold text-gray-900 dark:text-slate-100">App Settings</h2>
+        <p className="mb-4 text-sm text-gray-500 dark:text-slate-400">
+          These values are written to{' '}
+          <code className="rounded bg-gray-100 px-1 text-xs dark:bg-slate-800">
+            {cfg?.configFile || 'config.yaml'}
+          </code>
+          . A restart is required for most changes to take effect.
+        </p>
 
-      {/* Karate Versions */}
+        {cfgError && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300">
+            {cfgError}
+          </div>
+        )}
+
+        {cfgForm ? (
+          <>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className={labelCls}>App Name</label>
+                <input className={inputCls} value={cfgForm.appName}
+                  onChange={(e) => handleCfgChange('appName', e.target.value)} />
+              </div>
+              <div>
+                <label className={labelCls}>App URL</label>
+                <input className={inputCls} value={cfgForm.appURL}
+                  onChange={(e) => handleCfgChange('appURL', e.target.value)} />
+              </div>
+              <div>
+                <label className={labelCls}>Environment</label>
+                <select className={inputCls} value={cfgForm.appEnv}
+                  onChange={(e) => handleCfgChange('appEnv', e.target.value)}>
+                  <option value="development">development</option>
+                  <option value="production">production</option>
+                  <option value="staging">staging</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Server Port</label>
+                <input type="number" className={inputCls} value={cfgForm.serverPort}
+                  onChange={(e) => handleCfgChange('serverPort', parseInt(e.target.value, 10) || 8080)} />
+              </div>
+              <div>
+                <label className={labelCls}>Log Level</label>
+                <select className={inputCls} value={cfgForm.logLevel}
+                  onChange={(e) => handleCfgChange('logLevel', e.target.value)}>
+                  <option value="debug">debug</option>
+                  <option value="info">info</option>
+                  <option value="warn">warn</option>
+                  <option value="error">error</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Log Format</label>
+                <select className={inputCls} value={cfgForm.logFormat}
+                  onChange={(e) => handleCfgChange('logFormat', e.target.value)}>
+                  <option value="text">text</option>
+                  <option value="json">json</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Data Directory</label>
+                <input className={inputCls} value={cfgForm.dataDir}
+                  onChange={(e) => handleCfgChange('dataDir', e.target.value)} />
+              </div>
+              <div>
+                <label className={labelCls}>Max Executors</label>
+                <input type="number" min={1} max={32} className={inputCls} value={cfgForm.maxExecutors}
+                  onChange={(e) => handleCfgChange('maxExecutors', parseInt(e.target.value, 10) || 4)} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelCls}>App Description</label>
+                <input className={inputCls} value={cfgForm.appDescription}
+                  onChange={(e) => handleCfgChange('appDescription', e.target.value)} />
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <button
+                onClick={handleSaveCfg}
+                disabled={savingCfg}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-50"
+              >
+                <Save className="h-4 w-4" />
+                {savingCfg ? 'Saving…' : cfgSaved ? 'Saved ✓' : 'Save Settings'}
+              </button>
+
+              {cfgSaved && (
+                <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-300">
+                  <span>Restart the server for changes to take effect.</span>
+                  <button
+                    onClick={handleReload}
+                    className="font-semibold underline underline-offset-2 hover:no-underline"
+                  >
+                    Reload page
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-gray-400 dark:text-slate-500">Loading…</p>
+        )}
+      </section>
+
+      {/* ── Karate Versions ─────────────────────────────────────────────────── */}
       <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <h2 className="mb-1 text-base font-semibold text-gray-900 dark:text-slate-100">Karate Versions</h2>
         <p className="mb-4 text-sm text-gray-500 dark:text-slate-400">
           Add Karate versions here. JARs are downloaded automatically to{' '}
           <code className="rounded bg-gray-100 px-1 text-xs dark:bg-slate-800">data/bin/</code>.
         </p>
+
+        {karateError && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300">
+            {karateError}
+          </div>
+        )}
 
         {versions.length === 0 ? (
           <p className="mb-4 text-sm text-gray-400 dark:text-slate-500">No versions configured yet.</p>
@@ -112,7 +258,7 @@ export default function SettingsPage() {
                   )}
                 </div>
                 <button
-                  onClick={() => handleRemove(v.version)}
+                  onClick={() => handleRemoveVersion(v.version)}
                   className="rounded-lg border border-red-200 p-1.5 text-red-500 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
                   title="Remove version"
                 >
@@ -139,7 +285,7 @@ export default function SettingsPage() {
                 {releases.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
               <button
-                onClick={handleAdd}
+                onClick={handleAddVersion}
                 disabled={!selectedRelease || adding}
                 className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-50"
               >
@@ -151,7 +297,7 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* App metadata */}
+      {/* ── App metadata ────────────────────────────────────────────────────── */}
       {meta && (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">

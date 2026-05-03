@@ -15,11 +15,12 @@ import (
 )
 
 type Handler struct {
-	config   config.Config
-	version  version.Info
-	storage  *storage.Storage
-	executor testclient.Executor
-	queue    *queue.Queue
+	config     config.Config
+	configFile string // path to config.yaml on disk; empty if none found at startup
+	version    version.Info
+	storage    *storage.Storage
+	executor   testclient.Executor
+	queue      *queue.Queue
 }
 
 type healthResponse struct {
@@ -49,8 +50,8 @@ type metaResponse struct {
 	Version     version.Info `json:"version"`
 }
 
-func NewHandler(cfg config.Config, build version.Info, st *storage.Storage, exec testclient.Executor, q *queue.Queue) *Handler {
-	return &Handler{config: cfg, version: build, storage: st, executor: exec, queue: q}
+func NewHandler(cfg config.Config, configFile string, build version.Info, st *storage.Storage, exec testclient.Executor, q *queue.Queue) *Handler {
+	return &Handler{config: cfg, configFile: configFile, version: build, storage: st, executor: exec, queue: q}
 }
 
 
@@ -89,6 +90,68 @@ func (h *Handler) Meta(w http.ResponseWriter, r *http.Request) {
 		UIProxy:     h.config.UI.DevProxyURL,
 		Version:     h.version,
 	})
+}
+
+// ─── Config Endpoints ─────────────────────────────────────────────────────────
+
+type configPayload struct {
+	AppName        string `json:"appName"`
+	AppDescription string `json:"appDescription"`
+	AppURL         string `json:"appURL"`
+	AppEnv         string `json:"appEnv"`
+	ServerPort     int    `json:"serverPort"`
+	LogLevel       string `json:"logLevel"`
+	LogFormat      string `json:"logFormat"`
+	DataDir        string `json:"dataDir"`
+	MaxExecutors   int    `json:"maxExecutors"`
+	ConfigFile     string `json:"configFile"`
+}
+
+func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
+	respondJSON(w, http.StatusOK, configPayload{
+		AppName:        h.config.App.Name,
+		AppDescription: h.config.App.Description,
+		AppURL:         h.config.App.URL,
+		AppEnv:         h.config.App.Env,
+		ServerPort:     h.config.Server.Port,
+		LogLevel:       h.config.Logging.Level,
+		LogFormat:      h.config.Logging.Format,
+		DataDir:        h.config.Tests.DataDir,
+		MaxExecutors:   h.config.Tests.MaxExecutors,
+		ConfigFile:     h.configFile,
+	})
+}
+
+func (h *Handler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
+	var req configPayload
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	updated := h.config
+	updated.App.Name = req.AppName
+	updated.App.Description = req.AppDescription
+	updated.App.URL = req.AppURL
+	updated.App.Env = req.AppEnv
+	updated.Server.Port = req.ServerPort
+	updated.Logging.Level = req.LogLevel
+	updated.Logging.Format = req.LogFormat
+	updated.Tests.DataDir = req.DataDir
+	updated.Tests.MaxExecutors = req.MaxExecutors
+
+	if err := config.WriteConfig(updated, h.configFile); err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to write config: "+err.Error())
+		return
+	}
+
+	// Update in-memory config and the stored file path (in case it was just created).
+	h.config = updated
+	if h.configFile == "" {
+		h.configFile = "config.yaml"
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"status": "ok", "configFile": h.configFile})
 }
 
 // ─── Project Endpoints ───────────────────────────────────────────────────────

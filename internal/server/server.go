@@ -23,8 +23,9 @@ import (
 )
 
 type Options struct {
-	DevMode bool
-	UIFS    fs.FS
+	DevMode    bool
+	UIFS       fs.FS
+	ConfigFile string // path to config.yaml; empty if not found at startup
 }
 
 type App struct {
@@ -76,7 +77,7 @@ func (a *App) Handler() http.Handler {
 	r.Use(middleware.Heartbeat("/livez"))
 	r.Use(requestLogger(a.logger))
 
-	r.Mount("/api", api.NewRouter(a.cfg, a.logger, a.build, a.storage, a.executor, a.queue))
+	r.Mount("/api", api.NewRouter(a.cfg, a.options.ConfigFile, a.logger, a.build, a.storage, a.executor, a.queue))
 
 	if a.options.DevMode && strings.TrimSpace(a.cfg.UI.DevProxyURL) != "" {
 		r.Handle("/*", newDevProxy(a.cfg.UI.DevProxyURL, a.logger))

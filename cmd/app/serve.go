@@ -47,8 +47,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 	buildInfo := version.Current()
 
 	appServer, err := server.New(cfg, logger, buildInfo, server.Options{
-		DevMode: devMode,
-		UIFS:    uiFS,
+		DevMode:    devMode,
+		UIFS:       uiFS,
+		ConfigFile: viper.GetViper().ConfigFileUsed(),
 	})
 	if err != nil {
 		return err

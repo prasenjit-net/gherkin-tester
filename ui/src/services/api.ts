@@ -1,4 +1,4 @@
-import type { ExampleResponse, HealthResponse, KarateVersion, MetaResponse, Project, QueueItem, Test, TestResult } from '../types'
+import type { AppConfig, ExampleResponse, HealthResponse, KarateVersion, MetaResponse, Project, QueueItem, Test, TestResult } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
@@ -126,4 +126,14 @@ export const karateApi = {
   versionStatus: async (version: string) =>
     handleResponse<{ version: string; downloaded: boolean }>(await fetch(`${API_BASE}/karate-versions/${version}/status`)),
   fetchReleases: async () => handleResponse<string[]>(await fetch(`${API_BASE}/karate-releases`)),
+}
+
+export const configApi = {
+  get: async () => handleResponse<AppConfig>(await fetch(`${API_BASE}/config`)),
+  update: async (cfg: Omit<AppConfig, 'configFile'>) =>
+    handleResponse<{ status: string; configFile: string }>(await fetch(`${API_BASE}/config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cfg),
+    })),
 }
