@@ -53,10 +53,29 @@ func (s *Storage) ensureUniqueID(base string) string {
 	}
 }
 
+// normalizeGitURL strips trailing slashes and a ".git" suffix so that
+// https://github.com/user/repo and https://github.com/user/repo.git are
+// treated as the same repository.
+func normalizeGitURL(raw string) string {
+	raw = strings.TrimRight(raw, "/")
+	raw = strings.TrimSuffix(raw, ".git")
+	return strings.ToLower(raw)
+}
+
 // ImportProjectFromGit clones a remote git repository into the projects
 // directory and returns a Project ready to use. If project.json already
 // exists in the cloned repo it is used; otherwise a new one is created.
 func (s *Storage) ImportProjectFromGit(repoURL, branch, name, description, karateVersion string) (*Project, error) {
+	// Guard: reject if a project with the same git URL already exists.
+	if existing, err := s.ListProjects(); err == nil {
+		norm := normalizeGitURL(repoURL)
+		for _, p := range existing {
+			if p.GitURL != "" && normalizeGitURL(p.GitURL) == norm {
+				return nil, fmt.Errorf("project %q already imported from %s", p.Name, repoURL)
+			}
+		}
+	}
+
 	baseID := deriveProjectID(repoURL)
 	projectID := s.ensureUniqueID(baseID)
 	targetDir := s.projectDir(projectID)
