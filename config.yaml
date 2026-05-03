@@ -1,25 +1,21 @@
 app:
-  name: Gherkin Tester
-  env: development
-  url: http://localhost:8080
-  description: Karate test execution agent for API testing.
-
+    name: Gherkin Tester
+    env: development
+    url: http://localhost:8081
+    description: Karate test execution agent for API testing.
 server:
-  host: 0.0.0.0
-  port: 8080
-  readTimeout: 15s
-  writeTimeout: 15s
-  idleTimeout: 60s
-  shutdownTimeout: 10s
-
+    host: 0.0.0.0
+    port: 8081
+    readTimeout: 15s
+    writeTimeout: 15s
+    idleTimeout: 1m0s
+    shutdownTimeout: 10s
 logging:
-  level: info
-  format: text
-
+    level: info
+    format: text
 ui:
-  devProxyURL: http://localhost:5173
-
+    devProxyURL: http://localhost:5173
 tests:
-  dataDir: ./data
-  karateJar: ./data/bin/karate.jar
-  maxExecutors: 4
+    dataDir: ./data
+    karateJar: ./data/bin/karate.jar
+    maxExecutors: 4

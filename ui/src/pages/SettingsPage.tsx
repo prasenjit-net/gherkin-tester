@@ -52,7 +52,15 @@ export default function SettingsPage() {
     }
   }
 
-  const handleReload = () => window.location.reload()
+  const handleReload = () => {
+    if (cfgForm && cfgForm.serverPort !== cfg?.serverPort) {
+      // Port changed — redirect to the new origin so the reload lands on the right port.
+      const { protocol, hostname, pathname } = window.location
+      window.location.href = `${protocol}//${hostname}:${cfgForm.serverPort}${pathname}`
+    } else {
+      window.location.reload()
+    }
+  }
 
   // ── Karate handlers ──────────────────────────────────────────────────────────
   const loadVersions = async () => {
