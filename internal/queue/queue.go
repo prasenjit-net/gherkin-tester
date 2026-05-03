@@ -157,17 +157,27 @@ func (q *Queue) Cancel(id string) bool {
 	return false
 }
 
-// ClearCompleted removes all non-queued, non-running items from the list.
+// ClearCompleted removes all non-queued, non-running items from the list and deletes their execution directories from disk.
 func (q *Queue) ClearCompleted() {
 	q.mu.Lock()
 	var active []*Item
+	var toDelete []string
 	for _, it := range q.items {
 		if it.Status == StatusQueued || it.Status == StatusRunning {
 			active = append(active, it)
+		} else {
+			toDelete = append(toDelete, it.ID)
 		}
 	}
 	q.items = active
 	q.mu.Unlock()
+
+	for _, id := range toDelete {
+		if err := q.st.DeleteExecution(id); err != nil {
+			q.log.Error("queue: failed to delete execution", "id", id, "error", err)
+		}
+	}
+
 	q.broadcastSnapshot()
 }
 

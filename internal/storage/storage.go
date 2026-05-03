@@ -324,7 +324,7 @@ return nil
 }
 
 func (s *Storage) GetExecution(execID string) (*TestResult, error) {
-dir := s.execDir(execID)
+	dir := s.execDir(execID)
 
 metaData, err := os.ReadFile(filepath.Join(dir, "execution.json"))
 if err != nil {
@@ -365,7 +365,12 @@ return result, nil
 
 // GetTestResult is an alias kept for handler compatibility.
 func (s *Storage) GetTestResult(execID string) (*TestResult, error) {
-return s.GetExecution(execID)
+	return s.GetExecution(execID)
+}
+
+// DeleteExecution removes an execution directory from disk.
+func (s *Storage) DeleteExecution(execID string) error {
+	return os.RemoveAll(s.execDir(execID))
 }
 
 func (s *Storage) ListTestResults(projectID, testID string) ([]TestResult, error) {
