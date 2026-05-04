@@ -1,4 +1,4 @@
-import type { AppConfig, DashboardStats, Environment, EnvironmentDraft, ExampleResponse, GitStatusResult, HealthResponse, KarateVersion, MetaResponse, Project, QueueItem, Test, TestResult } from '../types'
+import type { AppConfig, AppConfigUpdate, DashboardStats, Environment, EnvironmentDraft, ExampleResponse, GitStatusResult, HealthResponse, KarateVersion, MetaResponse, Project, QueueItem, Spec, SpecDetail, SpecDraft, SpecGenerationResult, Test, TestResult } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
@@ -58,6 +58,25 @@ export const projectApi = {
     })),
   listTests: async (projectID: string) =>
     handleResponse<Test[]>(await fetch(`${API_BASE}/projects/${projectID}/tests`)),
+  listSpecs: async (projectID: string) =>
+    handleResponse<Spec[]>(await fetch(`${API_BASE}/projects/${projectID}/specs`)),
+  createSpec: async (projectID: string, spec: SpecDraft) =>
+    handleResponse<Spec>(await fetch(`${API_BASE}/projects/${projectID}/specs`, {
+      method: 'POST',
+      body: buildSpecFormData(spec),
+    })),
+  getSpec: async (projectID: string, specID: string) =>
+    handleResponse<SpecDetail>(await fetch(`${API_BASE}/projects/${projectID}/specs/${specID}`)),
+  generateSpecTests: async (projectID: string, specID: string, prompt: string) =>
+    handleResponse<SpecGenerationResult>(await fetch(`${API_BASE}/projects/${projectID}/specs/${specID}/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    })),
+  deleteSpec: async (projectID: string, specID: string) =>
+    handleResponse<{ message: string }>(await fetch(`${API_BASE}/projects/${projectID}/specs/${specID}`, {
+      method: 'DELETE',
+    })),
   createTest: async (projectID: string, test: Omit<Test, 'projectId' | 'createdAt' | 'updatedAt'>) =>
     handleResponse<Test>(await fetch(`${API_BASE}/projects/${projectID}/tests`, {
       method: 'POST',
@@ -148,7 +167,7 @@ export const karateApi = {
 
 export const configApi = {
   get: async () => handleResponse<AppConfig>(await fetch(`${API_BASE}/config`)),
-  update: async (cfg: Omit<AppConfig, 'configFile'>) =>
+  update: async (cfg: AppConfigUpdate) =>
     handleResponse<{ status: string; configFile: string }>(await fetch(`${API_BASE}/config`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -188,5 +207,13 @@ function buildEnvironmentFormData(env: Partial<EnvironmentDraft>, files?: { cert
   if (env.mtls?.clearPrivateKeyPassword) formData.set('mtlsClearPrivateKeyPassword', 'true')
   if (files?.certificate) formData.set('mtlsCertificate', files.certificate)
   if (files?.privateKey) formData.set('mtlsPrivateKey', files.privateKey)
+  return formData
+}
+
+function buildSpecFormData(spec: SpecDraft) {
+  const formData = new FormData()
+  if (spec.name !== undefined) formData.set('name', spec.name)
+  if (spec.description !== undefined) formData.set('description', spec.description)
+  formData.set('file', spec.file)
   return formData
 }

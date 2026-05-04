@@ -19,3 +19,8 @@ tests:
     dataDir: ./data
     karateJar: ./data/bin/karate.jar
     maxExecutors: 4
+ai:
+    provider: openai
+    model: gpt-4.1-mini
+    baseURL: https://api.openai.com/v1
+    apiKey: ""

@@ -1,0 +1,240 @@
+openapi: 3.0.3
+info:
+  title: Widget Catalog Test API
+  version: 1.0.0
+  description: |
+    Minimal documented API contract for OpenAPI upload and generation tests.
+
+    This specification is intentionally small and fully documented so it can be
+    used as a deterministic fixture for testing OpenAPI upload, parsing, detail
+    display, and AI-assisted Gherkin generation workflows.
+
+    The API exposes exactly two operations:
+    1. `GET /widgets` to list widgets with optional filtering.
+    2. `POST /widgets` to create a new widget.
+
+    All examples, schemas, and responses are included to give the generator
+    enough grounded context without making the fixture unnecessarily large.
+  contact:
+    name: Gherkin Tester QA Fixtures
+    email: qa-fixtures@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+servers:
+  - url: https://api.example.test
+    description: Primary test server
+tags:
+  - name: Widgets
+    description: Operations for listing and creating catalog widgets
+paths:
+  /widgets:
+    get:
+      tags:
+        - Widgets
+      operationId: listWidgets
+      summary: List widgets
+      description: |
+        Returns a paginated collection of widgets.
+
+        Clients may optionally filter the result by widget status and limit the
+        number of records returned in a single page.
+      parameters:
+        - name: status
+          in: query
+          description: Filter widgets by their lifecycle status.
+          required: false
+          schema:
+            type: string
+            enum:
+              - active
+              - archived
+          example: active
+        - name: limit
+          in: query
+          description: Maximum number of widgets to return.
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          example: 10
+      responses:
+        '200':
+          description: Widget list retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WidgetListResponse'
+              examples:
+                success:
+                  summary: Example widget list
+                  value:
+                    items:
+                      - id: wid_1001
+                        name: Starter Widget
+                        status: active
+                        price: 19.99
+                        createdAt: '2026-01-10T09:30:00Z'
+                      - id: wid_1002
+                        name: Archive Widget
+                        status: archived
+                        price: 12.5
+                        createdAt: '2026-01-08T15:45:00Z'
+                    total: 2
+        '400':
+          description: One or more query parameters are invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: invalid_query
+                message: limit must be between 1 and 100
+    post:
+      tags:
+        - Widgets
+      operationId: createWidget
+      summary: Create a widget
+      description: |
+        Creates a new widget in the catalog and returns the created resource.
+
+        The request body requires a unique widget name, an initial lifecycle
+        status, and a non-negative price.
+      requestBody:
+        required: true
+        description: Widget payload used to create a new catalog entry.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWidgetRequest'
+            examples:
+              create:
+                summary: Create widget request
+                value:
+                  name: Premium Widget
+                  status: active
+                  price: 49.95
+      responses:
+        '201':
+          description: Widget created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Widget'
+              examples:
+                created:
+                  summary: Created widget response
+                  value:
+                    id: wid_1003
+                    name: Premium Widget
+                    status: active
+                    price: 49.95
+                    createdAt: '2026-01-12T11:00:00Z'
+        '400':
+          description: The request body failed validation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: validation_error
+                message: name is required
+components:
+  schemas:
+    Widget:
+      type: object
+      description: A widget stored in the catalog.
+      required:
+        - id
+        - name
+        - status
+        - price
+        - createdAt
+      properties:
+        id:
+          type: string
+          description: Stable unique identifier for the widget.
+          example: wid_1001
+        name:
+          type: string
+          description: Human-readable widget name.
+          minLength: 1
+          example: Starter Widget
+        status:
+          type: string
+          description: Current lifecycle state of the widget.
+          enum:
+            - active
+            - archived
+          example: active
+        price:
+          type: number
+          format: float
+          description: Retail price for the widget in US dollars.
+          minimum: 0
+          example: 19.99
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the widget was created.
+          example: '2026-01-10T09:30:00Z'
+    CreateWidgetRequest:
+      type: object
+      description: Payload required to create a new widget.
+      required:
+        - name
+        - status
+        - price
+      properties:
+        name:
+          type: string
+          description: Human-readable widget name.
+          minLength: 1
+          example: Premium Widget
+        status:
+          type: string
+          description: Initial lifecycle state for the new widget.
+          enum:
+            - active
+            - archived
+          example: active
+        price:
+          type: number
+          format: float
+          description: Retail price for the new widget in US dollars.
+          minimum: 0
+          example: 49.95
+    WidgetListResponse:
+      type: object
+      description: Paginated wrapper returned when listing widgets.
+      required:
+        - items
+        - total
+      properties:
+        items:
+          type: array
+          description: Widgets matching the request filters.
+          items:
+            $ref: '#/components/schemas/Widget'
+        total:
+          type: integer
+          description: Total number of matching widgets.
+          minimum: 0
+          example: 2
+    ErrorResponse:
+      type: object
+      description: Standard error payload returned for invalid requests.
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code.
+          example: validation_error
+        message:
+          type: string
+          description: Human-readable error message.
+          example: name is required

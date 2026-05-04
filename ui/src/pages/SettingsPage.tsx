@@ -12,6 +12,8 @@ export default function SettingsPage() {
   const [savingCfg, setSavingCfg] = useState(false)
   const [cfgSaved, setCfgSaved] = useState(false)
   const [cfgError, setCfgError] = useState<string | null>(null)
+  const [aiApiKey, setAiApiKey] = useState('')
+  const [clearAiApiKey, setClearAiApiKey] = useState(false)
 
   // ── App meta ─────────────────────────────────────────────────────────────────
   const [meta, setMeta] = useState<Awaited<ReturnType<typeof metaApi.get>> | null>(null)
@@ -32,7 +34,12 @@ export default function SettingsPage() {
   useEffect(() => {
     metaApi.get().then(setMeta).catch(() => {})
     loadVersions()
-    configApi.get().then((c) => { setCfg(c); setCfgForm(c) }).catch(() => {})
+    configApi.get().then((c) => {
+      setCfg(c)
+      setCfgForm(c)
+      setAiApiKey('')
+      setClearAiApiKey(false)
+    }).catch(() => {})
   }, [])
 
   // Listen for karate download events to update status badges in real-time.
@@ -61,9 +68,32 @@ export default function SettingsPage() {
     setSavingCfg(true)
     setCfgError(null)
     try {
-      const res = await configApi.update(cfgForm)
-      setCfg({ ...cfgForm, configFile: res.configFile })
-      setCfgForm((f) => f ? { ...f, configFile: res.configFile } : f)
+      const nextAIKey = aiApiKey.trim()
+      const res = await configApi.update({
+        appName: cfgForm.appName,
+        appDescription: cfgForm.appDescription,
+        appURL: cfgForm.appURL,
+        appEnv: cfgForm.appEnv,
+        serverPort: cfgForm.serverPort,
+        logLevel: cfgForm.logLevel,
+        logFormat: cfgForm.logFormat,
+        dataDir: cfgForm.dataDir,
+        maxExecutors: cfgForm.maxExecutors,
+        aiProvider: cfgForm.aiProvider,
+        aiModel: cfgForm.aiModel,
+        aiBaseURL: cfgForm.aiBaseURL,
+        aiApiKey: nextAIKey || undefined,
+        clearAiApiKey: clearAiApiKey && nextAIKey === '',
+      })
+      const nextCfg = {
+        ...cfgForm,
+        configFile: res.configFile,
+        hasAiApiKey: nextAIKey !== '' ? true : clearAiApiKey ? false : cfgForm.hasAiApiKey,
+      }
+      setCfg(nextCfg)
+      setCfgForm(nextCfg)
+      setAiApiKey('')
+      setClearAiApiKey(false)
       setCfgSaved(true)
       setTimeout(() => setCfgSaved(false), 2500)
     } catch (e) {
@@ -92,7 +122,9 @@ export default function SettingsPage() {
         try {
           const s = await karateApi.versionStatus(v.version)
           setStatusMap((m) => ({ ...m, [v.version]: s.downloaded }))
-        } catch {}
+        } catch {
+          return undefined
+        }
       })
     } catch (e) {
       setKarateError(e instanceof Error ? e.message : 'Failed to load versions')
@@ -223,6 +255,84 @@ export default function SettingsPage() {
                 <input className={inputCls} value={cfgForm.appDescription}
                   onChange={(e) => handleCfgChange('appDescription', e.target.value)} />
               </div>
+            </div>
+
+            <div className="mt-6 border-t border-gray-200 pt-6 dark:border-slate-800">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">AI Generation</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+                Configure the OpenAI-compatible provider used for spec-based Gherkin generation. The API key is written to{' '}
+                <code className="rounded bg-gray-100 px-1 text-xs dark:bg-slate-800">
+                  {cfg?.configFile || 'config.yaml'}
+                </code>
+                .
+              </p>
+
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={labelCls}>Provider</label>
+                  <input
+                    className={inputCls}
+                    value={cfgForm.aiProvider}
+                    onChange={(e) => handleCfgChange('aiProvider', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Model</label>
+                  <input
+                    className={inputCls}
+                    value={cfgForm.aiModel}
+                    onChange={(e) => handleCfgChange('aiModel', e.target.value)}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Base URL</label>
+                  <input
+                    className={inputCls}
+                    value={cfgForm.aiBaseURL}
+                    onChange={(e) => handleCfgChange('aiBaseURL', e.target.value)}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>API Key</label>
+                  <input
+                    type="password"
+                    className={inputCls}
+                    value={aiApiKey}
+                    placeholder={cfgForm.hasAiApiKey && !clearAiApiKey ? 'Saved API key configured' : 'sk-...'}
+                    onChange={(e) => {
+                      setAiApiKey(e.target.value)
+                      if (e.target.value !== '') {
+                        setClearAiApiKey(false)
+                      }
+                    }}
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                    {cfgForm.hasAiApiKey && !clearAiApiKey
+                      ? 'Leave blank to keep the saved key unchanged, or paste a new one to replace it.'
+                      : 'Add an API key to enable OpenAI-backed spec generation.'}
+                  </p>
+                </div>
+              </div>
+
+              {cfgForm.hasAiApiKey && (
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClearAiApiKey((value) => !value)
+                      setAiApiKey('')
+                    }}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    {clearAiApiKey ? 'Keep saved API key' : 'Remove saved API key'}
+                  </button>
+                  {clearAiApiKey && (
+                    <span className="text-xs text-amber-700 dark:text-amber-300">
+                      The saved API key will be removed when you save settings.
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-3">

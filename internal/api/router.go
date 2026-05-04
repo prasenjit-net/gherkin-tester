@@ -25,6 +25,11 @@ func NewRouter(cfg config.Config, configFile string, logger *slog.Logger, build 
 	r.Get("/events/stream", h.EventStream)
 	r.Get("/queue/stream", h.EventStream) // backward-compat alias
 
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.Timeout(2 * time.Minute))
+		r.Post("/projects/{projectID}/specs/{specID}/generate", h.GenerateProjectSpecTests)
+	})
+
 	// All other routes run under the 30-second request timeout
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Timeout(30 * time.Second))
@@ -69,6 +74,10 @@ func NewRouter(cfg config.Config, configFile string, logger *slog.Logger, build 
 		r.Get("/karate-releases", h.KarateReleasesProxy)
 
 		// Project-scoped test routes
+		r.Post("/projects/{projectID}/specs", h.CreateProjectSpec)
+		r.Get("/projects/{projectID}/specs", h.ListProjectSpecs)
+		r.Get("/projects/{projectID}/specs/{specID}", h.GetProjectSpec)
+		r.Delete("/projects/{projectID}/specs/{specID}", h.DeleteProjectSpec)
 		r.Post("/projects/{projectID}/tests", h.CreateProjectTest)
 		r.Get("/projects/{projectID}/tests", h.ListProjectTests)
 		r.Get("/projects/{projectID}/tests/{testID}", h.GetTest)

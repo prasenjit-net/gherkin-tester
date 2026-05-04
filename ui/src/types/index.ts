@@ -44,6 +44,56 @@ export interface Project {
   updatedAt: string
 }
 
+export interface OpenAPIServer {
+  url: string
+  description?: string
+}
+
+export interface OpenAPISummary {
+  openapiVersion?: string
+  title?: string
+  version?: string
+  description?: string
+  servers?: OpenAPIServer[]
+  tags?: string[]
+  pathsCount: number
+  operationsCount: number
+}
+
+export interface OpenAPIEndpoint {
+  path: string
+  method: string
+  operationId?: string
+  summary?: string
+  description?: string
+  tags?: string[]
+  deprecated?: boolean
+}
+
+export interface Spec {
+  id: string
+  projectId: string
+  name: string
+  description?: string
+  fileName: string
+  format: string
+  summary: OpenAPISummary
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SpecDetail {
+  spec: Spec
+  endpoints: OpenAPIEndpoint[]
+  content: string
+}
+
+export interface SpecGenerationResult {
+  provider: string
+  model: string
+  tests: Test[]
+}
+
 export interface GitStatusResult {
   branch: string
   ahead: number
@@ -67,7 +117,28 @@ export interface AppConfig {
   logFormat: string
   dataDir: string
   maxExecutors: number
+  aiProvider: string
+  aiModel: string
+  aiBaseURL: string
+  hasAiApiKey: boolean
   configFile: string
+}
+
+export interface AppConfigUpdate {
+  appName: string
+  appDescription: string
+  appURL: string
+  appEnv: string
+  serverPort: number
+  logLevel: string
+  logFormat: string
+  dataDir: string
+  maxExecutors: number
+  aiProvider: string
+  aiModel: string
+  aiBaseURL: string
+  aiApiKey?: string
+  clearAiApiKey?: boolean
 }
 
 export interface Test {
@@ -154,4 +225,10 @@ export interface DashboardStats {
   failedCount: number
   errorCount: number
   recentExecutions: TestResult[]
+}
+
+export interface SpecDraft {
+  name?: string
+  description?: string
+  file: File
 }

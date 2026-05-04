@@ -24,6 +24,67 @@ type Test struct {
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
+type OpenAPIServer struct {
+	URL         string `json:"url"`
+	Description string `json:"description,omitempty"`
+}
+
+type OpenAPISummary struct {
+	OpenAPIVersion  string          `json:"openapiVersion,omitempty"`
+	Title           string          `json:"title,omitempty"`
+	Version         string          `json:"version,omitempty"`
+	Description     string          `json:"description,omitempty"`
+	Servers         []OpenAPIServer `json:"servers,omitempty"`
+	Tags            []string        `json:"tags,omitempty"`
+	PathsCount      int             `json:"pathsCount"`
+	OperationsCount int             `json:"operationsCount"`
+}
+
+type OpenAPIEndpoint struct {
+	Path        string   `json:"path"`
+	Method      string   `json:"method"`
+	OperationID string   `json:"operationId,omitempty"`
+	Summary     string   `json:"summary,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	Deprecated  bool     `json:"deprecated,omitempty"`
+}
+
+type Spec struct {
+	ID          string         `json:"id"`
+	ProjectID   string         `json:"projectId"`
+	Name        string         `json:"name"`
+	Description string         `json:"description,omitempty"`
+	FileName    string         `json:"fileName"`
+	Format      string         `json:"format"`
+	Summary     OpenAPISummary `json:"summary"`
+	CreatedAt   time.Time      `json:"createdAt"`
+	UpdatedAt   time.Time      `json:"updatedAt"`
+}
+
+type SpecDetail struct {
+	Spec      *Spec             `json:"spec"`
+	Endpoints []OpenAPIEndpoint `json:"endpoints"`
+	Content   string            `json:"content"`
+}
+
+type SpecGenerationRequest struct {
+	Prompt string `json:"prompt"`
+}
+
+type GeneratedFeatureFile struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	Content     string   `json:"content"`
+}
+
+type SpecGenerationResult struct {
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+	Tests    []Test `json:"tests"`
+}
+
 type TestResult struct {
 	ID            string    `json:"id"`
 	TestID        string    `json:"testId"`

@@ -13,6 +13,8 @@ func TestLoadFromViper(t *testing.T) {
 	v.Set("app.name", "Template")
 	v.Set("server.port", 9090)
 	v.Set("server.readTimeout", "30s")
+	v.Set("ai.model", "gpt-5-mini")
+	v.Set("ai.apiKey", "sk-test")
 
 	cfg, err := Load(v)
 	if err != nil {
@@ -26,5 +28,11 @@ func TestLoadFromViper(t *testing.T) {
 	}
 	if cfg.Server.ReadTimeout != 30*time.Second {
 		t.Fatalf("expected duration decode, got %s", cfg.Server.ReadTimeout)
+	}
+	if cfg.AI.Model != "gpt-5-mini" {
+		t.Fatalf("expected ai model override, got %q", cfg.AI.Model)
+	}
+	if cfg.AI.APIKey != "sk-test" {
+		t.Fatalf("expected ai api key override, got %q", cfg.AI.APIKey)
 	}
 }

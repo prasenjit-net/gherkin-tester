@@ -3,13 +3,16 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/prasenjit-net/gherkin-tester/internal/ai"
 	"github.com/prasenjit-net/gherkin-tester/internal/config"
 	"github.com/prasenjit-net/gherkin-tester/internal/events"
 	"github.com/prasenjit-net/gherkin-tester/internal/queue"
@@ -27,6 +30,8 @@ type Handler struct {
 	queue      *queue.Queue
 	bus        *events.Bus
 }
+
+var featureTagPattern = regexp.MustCompile(`@([A-Za-z0-9_:-]+)`)
 
 type healthResponse struct {
 	Status    string       `json:"status"`
@@ -115,7 +120,28 @@ type configPayload struct {
 	LogFormat      string `json:"logFormat"`
 	DataDir        string `json:"dataDir"`
 	MaxExecutors   int    `json:"maxExecutors"`
+	AIProvider     string `json:"aiProvider"`
+	AIModel        string `json:"aiModel"`
+	AIBaseURL      string `json:"aiBaseURL"`
+	HasAIAPIKey    bool   `json:"hasAiApiKey"`
 	ConfigFile     string `json:"configFile"`
+}
+
+type updateConfigPayload struct {
+	AppName        string `json:"appName"`
+	AppDescription string `json:"appDescription"`
+	AppURL         string `json:"appURL"`
+	AppEnv         string `json:"appEnv"`
+	ServerPort     int    `json:"serverPort"`
+	LogLevel       string `json:"logLevel"`
+	LogFormat      string `json:"logFormat"`
+	DataDir        string `json:"dataDir"`
+	MaxExecutors   int    `json:"maxExecutors"`
+	AIProvider     string `json:"aiProvider"`
+	AIModel        string `json:"aiModel"`
+	AIBaseURL      string `json:"aiBaseURL"`
+	AIAPIKey       string `json:"aiApiKey"`
+	ClearAIAPIKey  bool   `json:"clearAiApiKey"`
 }
 
 func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
@@ -129,12 +155,16 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 		LogFormat:      h.config.Logging.Format,
 		DataDir:        h.config.Tests.DataDir,
 		MaxExecutors:   h.config.Tests.MaxExecutors,
+		AIProvider:     h.config.AI.Provider,
+		AIModel:        h.config.AI.Model,
+		AIBaseURL:      h.config.AI.BaseURL,
+		HasAIAPIKey:    strings.TrimSpace(h.config.AI.APIKey) != "",
 		ConfigFile:     h.configFile,
 	})
 }
 
 func (h *Handler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
-	var req configPayload
+	var req updateConfigPayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -150,6 +180,15 @@ func (h *Handler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 	updated.Logging.Format = req.LogFormat
 	updated.Tests.DataDir = req.DataDir
 	updated.Tests.MaxExecutors = req.MaxExecutors
+	updated.AI.Provider = req.AIProvider
+	updated.AI.Model = req.AIModel
+	updated.AI.BaseURL = req.AIBaseURL
+	switch {
+	case strings.TrimSpace(req.AIAPIKey) != "":
+		updated.AI.APIKey = strings.TrimSpace(req.AIAPIKey)
+	case req.ClearAIAPIKey:
+		updated.AI.APIKey = ""
+	}
 
 	if err := config.WriteConfig(updated, h.configFile); err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to write config: "+err.Error())
@@ -289,6 +328,154 @@ func (h *Handler) GitForcePull(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]string{"status": "force-pulled"})
+}
+
+// ─── Spec Endpoints (project-scoped) ──────────────────────────────────────────
+
+func (h *Handler) ListProjectSpecs(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectID")
+	if _, err := h.storage.GetProject(projectID); err != nil {
+		respondError(w, http.StatusNotFound, "project not found")
+		return
+	}
+	specs, err := h.storage.ListSpecsByProject(projectID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if specs == nil {
+		specs = []storage.Spec{}
+	}
+	respondJSON(w, http.StatusOK, specs)
+}
+
+func (h *Handler) CreateProjectSpec(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectID")
+	if _, err := h.storage.GetProject(projectID); err != nil {
+		respondError(w, http.StatusNotFound, "project not found")
+		return
+	}
+	if err := r.ParseMultipartForm(20 << 20); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid multipart form")
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "spec file is required")
+		return
+	}
+	defer file.Close()
+
+	content, err := io.ReadAll(file)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to read spec file")
+		return
+	}
+
+	spec, err := h.storage.CreateSpec(projectID, storage.SpecUpload{
+		Name:        r.FormValue("name"),
+		Description: r.FormValue("description"),
+		FileName:    header.Filename,
+		Content:     content,
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "OpenAPI 3") || strings.Contains(err.Error(), "unsupported spec file type") || strings.Contains(err.Error(), "parse spec") || strings.Contains(err.Error(), "empty") {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, spec)
+}
+
+func (h *Handler) GetProjectSpec(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectID")
+	specID := chi.URLParam(r, "specID")
+	if _, err := h.storage.GetProject(projectID); err != nil {
+		respondError(w, http.StatusNotFound, "project not found")
+		return
+	}
+	spec, err := h.storage.GetSpecDetail(projectID, specID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "spec not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, spec)
+}
+
+func (h *Handler) DeleteProjectSpec(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectID")
+	specID := chi.URLParam(r, "specID")
+	if _, err := h.storage.GetProject(projectID); err != nil {
+		respondError(w, http.StatusNotFound, "project not found")
+		return
+	}
+	if _, err := h.storage.GetSpec(projectID, specID); err != nil {
+		respondError(w, http.StatusNotFound, "spec not found")
+		return
+	}
+	if err := h.storage.DeleteSpec(projectID, specID); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"message": "spec deleted"})
+}
+
+func (h *Handler) GenerateProjectSpecTests(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectID")
+	specID := chi.URLParam(r, "specID")
+
+	project, err := h.storage.GetProject(projectID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "project not found")
+		return
+	}
+	specDetail, err := h.storage.GetSpecDetail(projectID, specID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "spec not found")
+		return
+	}
+
+	var req storage.SpecGenerationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	client := ai.NewClient(h.config.AI, nil)
+	files, err := client.GenerateSpecTests(r.Context(), project, specDetail, req.Prompt)
+	if err != nil {
+		if strings.Contains(err.Error(), "AI settings incomplete") {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		respondError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	tests := make([]storage.Test, 0, len(files))
+	for _, file := range files {
+		test := &storage.Test{
+			ProjectID:   projectID,
+			Name:        file.Name,
+			Description: file.Description,
+			Content:     file.Content,
+			Tags:        mergeFeatureTags(file.Tags, file.Content),
+		}
+		if err := h.storage.CreateTest(test); err != nil {
+			respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		tests = append(tests, *test)
+	}
+
+	respondJSON(w, http.StatusCreated, storage.SpecGenerationResult{
+		Provider: client.Provider(),
+		Model:    client.Model(),
+		Tests:    tests,
+	})
 }
 
 // ─── Test Endpoints (project-scoped) ────────────────────────────────────────
@@ -824,6 +1011,30 @@ func parseEnvironmentRequest(r *http.Request) (*environmentRequest, error) {
 		return nil, err
 	}
 	return &req, nil
+}
+
+func mergeFeatureTags(tags []string, content string) []string {
+	tagSet := map[string]struct{}{}
+	for _, tag := range tags {
+		trimmed := strings.TrimSpace(strings.TrimPrefix(tag, "@"))
+		if trimmed != "" {
+			tagSet[trimmed] = struct{}{}
+		}
+	}
+	for _, match := range featureTagPattern.FindAllStringSubmatch(content, -1) {
+		if len(match) < 2 {
+			continue
+		}
+		trimmed := strings.TrimSpace(match[1])
+		if trimmed != "" {
+			tagSet[trimmed] = struct{}{}
+		}
+	}
+	merged := make([]string, 0, len(tagSet))
+	for tag := range tagSet {
+		merged = append(merged, tag)
+	}
+	return merged
 }
 
 func (h *Handler) ListEnvironments(w http.ResponseWriter, r *http.Request) {

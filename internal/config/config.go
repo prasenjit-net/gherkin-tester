@@ -17,6 +17,7 @@ type Config struct {
 	Logging LoggingConfig `mapstructure:"logging" yaml:"logging"`
 	UI      UIConfig      `mapstructure:"ui" yaml:"ui"`
 	Tests   TestsConfig   `mapstructure:"tests" yaml:"tests"`
+	AI      AIConfig      `mapstructure:"ai" yaml:"ai"`
 }
 
 type TestsConfig struct {
@@ -50,6 +51,13 @@ type UIConfig struct {
 	DevProxyURL string `mapstructure:"devProxyURL" yaml:"devProxyURL"`
 }
 
+type AIConfig struct {
+	Provider string `mapstructure:"provider" yaml:"provider"`
+	Model    string `mapstructure:"model" yaml:"model"`
+	BaseURL  string `mapstructure:"baseURL" yaml:"baseURL"`
+	APIKey   string `mapstructure:"apiKey" yaml:"apiKey"`
+}
+
 func Default() Config {
 	return Config{
 		App: AppConfig{
@@ -77,6 +85,12 @@ func Default() Config {
 			DataDir:      "./data",
 			KarateJAR:    "",
 			MaxExecutors: 4,
+		},
+		AI: AIConfig{
+			Provider: "openai",
+			Model:    "gpt-4.1-mini",
+			BaseURL:  "https://api.openai.com/v1",
+			APIKey:   "",
 		},
 	}
 }
@@ -108,6 +122,10 @@ func SetDefaults(v *viper.Viper) {
 	v.SetDefault("tests.dataDir", defaults.Tests.DataDir)
 	v.SetDefault("tests.karateJar", defaults.Tests.KarateJAR)
 	v.SetDefault("tests.maxExecutors", defaults.Tests.MaxExecutors)
+	v.SetDefault("ai.provider", defaults.AI.Provider)
+	v.SetDefault("ai.model", defaults.AI.Model)
+	v.SetDefault("ai.baseURL", defaults.AI.BaseURL)
+	v.SetDefault("ai.apiKey", defaults.AI.APIKey)
 }
 
 func Load(v *viper.Viper) (Config, error) {
@@ -200,6 +218,12 @@ tests:
   dataDir: ./data
   karateJar: ""
   maxExecutors: 4
+
+ai:
+  provider: openai
+  model: gpt-4.1-mini
+  baseURL: https://api.openai.com/v1
+  apiKey: ""
 `
 
 const DefaultEnvExample = `APP_ENV=development
@@ -212,4 +236,8 @@ APP_UI_DEV_PROXY_URL=http://localhost:5173
 APP_TESTS_DATA_DIR=./data
 APP_TESTS_KARATE_JAR=
 APP_TESTS_MAX_EXECUTORS=4
+APP_AI_PROVIDER=openai
+APP_AI_MODEL=gpt-4.1-mini
+APP_AI_BASE_URL=https://api.openai.com/v1
+APP_AI_API_KEY=
 `
