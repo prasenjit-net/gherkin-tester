@@ -123,9 +123,27 @@ export interface Environment {
   id: string
   name: string
   description?: string
+  httpProxy?: string
+  mtls?: {
+    certificateFileName?: string
+    privateKeyFileName?: string
+    hasPrivateKeyPassword?: boolean
+  }
   properties: Record<string, string>
   createdAt: string
   updatedAt: string
+}
+
+export interface EnvironmentDraft {
+  name: string
+  description?: string
+  httpProxy?: string
+  mtls?: {
+    privateKeyPassword?: string
+    clear?: boolean
+    clearPrivateKeyPassword?: boolean
+  }
+  properties: Record<string, string>
 }
 
 export interface DashboardStats {

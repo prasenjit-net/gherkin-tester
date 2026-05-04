@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { EventBusProvider } from './context/EventBusContext'
 import Layout from './components/Layout'
 import DashboardPage from './pages/DashboardPage'
+import EnvironmentEditorPage from './pages/EnvironmentEditorPage'
 import EnvironmentsPage from './pages/EnvironmentsPage'
 import ExamplesPage from './pages/ExamplesPage'
 import SettingsPage from './pages/SettingsPage'
@@ -19,6 +20,8 @@ function App() {
           <Route index element={<Navigate to="/projects" replace />} />
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="environments" element={<EnvironmentsPage />} />
+          <Route path="environments/new" element={<EnvironmentEditorPage />} />
+          <Route path="environments/:environmentID/edit" element={<EnvironmentEditorPage />} />
           <Route path="examples" element={<ExamplesPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="queue" element={<QueuePage />} />

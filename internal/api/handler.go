@@ -2,7 +2,10 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
+	"mime/multipart"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -62,7 +65,6 @@ func (h *Handler) EventStream(w http.ResponseWriter, r *http.Request) {
 	h.bus.Publish("queue.snapshot", map[string]any{"items": h.queue.Items()})
 	h.bus.ServeWS(w, r)
 }
-
 
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, healthResponse{
@@ -342,7 +344,7 @@ func (h *Handler) RunProjectTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.executor.Execute("", test, map[string]string{}, nil)
+	result, err := h.executor.Execute("", test, nil, nil)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -476,7 +478,7 @@ func (h *Handler) RunTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.executor.Execute("", test, map[string]string{}, nil)
+	result, err := h.executor.Execute("", test, nil, nil)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -582,12 +584,12 @@ func (h *Handler) QueueClear(w http.ResponseWriter, r *http.Request) {
 // ─── Dashboard stats ──────────────────────────────────────────────────────────
 
 type dashboardStats struct {
-	ProjectCount    int                   `json:"projectCount"`
-	TestCount       int                   `json:"testCount"`
-	TotalExecutions int                   `json:"totalExecutions"`
-	PassedCount     int                   `json:"passedCount"`
-	FailedCount     int                   `json:"failedCount"`
-	ErrorCount      int                   `json:"errorCount"`
+	ProjectCount     int                  `json:"projectCount"`
+	TestCount        int                  `json:"testCount"`
+	TotalExecutions  int                  `json:"totalExecutions"`
+	PassedCount      int                  `json:"passedCount"`
+	FailedCount      int                  `json:"failedCount"`
+	ErrorCount       int                  `json:"errorCount"`
 	RecentExecutions []storage.TestResult `json:"recentExecutions"`
 }
 
@@ -725,6 +727,105 @@ func (h *Handler) UpdateProject(w http.ResponseWriter, r *http.Request) {
 
 // ─── Environment CRUD ─────────────────────────────────────────────────────────
 
+type environmentMTLSPayload struct {
+	PrivateKeyPassword      string `json:"privateKeyPassword,omitempty"`
+	Clear                   bool   `json:"clear,omitempty"`
+	ClearPrivateKeyPassword bool   `json:"clearPrivateKeyPassword,omitempty"`
+}
+
+type environmentPayload struct {
+	Name        string                  `json:"name"`
+	Description string                  `json:"description"`
+	HTTPProxy   string                  `json:"httpProxy"`
+	Properties  map[string]string       `json:"properties"`
+	MTLS        *environmentMTLSPayload `json:"mtls,omitempty"`
+}
+
+type environmentRequest struct {
+	environmentPayload
+	CertificateFile *multipart.FileHeader
+	PrivateKeyFile  *multipart.FileHeader
+}
+
+func sanitizeEnvironmentResponse(env *storage.Environment) *storage.Environment {
+	if env == nil {
+		return nil
+	}
+	copyEnv := *env
+	if env.Properties != nil {
+		copyEnv.Properties = make(map[string]string, len(env.Properties))
+		for key, value := range env.Properties {
+			copyEnv.Properties[key] = value
+		}
+	}
+	if env.MTLS != nil {
+		copyMTLS := *env.MTLS
+		copyMTLS.PrivateKeyPassword = ""
+		copyMTLS.HasPrivateKeyPassword = env.MTLS.PrivateKeyPassword != ""
+		copyEnv.MTLS = &copyMTLS
+	}
+	return &copyEnv
+}
+
+func parseEnvironmentRequest(r *http.Request) (*environmentRequest, error) {
+	contentType := r.Header.Get("Content-Type")
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		if err := r.ParseMultipartForm(16 << 20); err != nil {
+			return nil, fmt.Errorf("parse multipart form: %w", err)
+		}
+		properties := map[string]string{}
+		rawProperties := strings.TrimSpace(r.FormValue("properties"))
+		if rawProperties != "" {
+			if err := json.Unmarshal([]byte(rawProperties), &properties); err != nil {
+				return nil, fmt.Errorf("parse properties: %w", err)
+			}
+		}
+		req := &environmentRequest{
+			environmentPayload: environmentPayload{
+				Name:        r.FormValue("name"),
+				Description: r.FormValue("description"),
+				HTTPProxy:   r.FormValue("httpProxy"),
+				Properties:  properties,
+			},
+		}
+		if password, ok := r.MultipartForm.Value["mtlsPrivateKeyPassword"]; ok && len(password) > 0 {
+			if req.MTLS == nil {
+				req.MTLS = &environmentMTLSPayload{}
+			}
+			req.MTLS.PrivateKeyPassword = password[0]
+		}
+		if clear, ok := r.MultipartForm.Value["mtlsClear"]; ok && len(clear) > 0 && clear[0] == "true" {
+			if req.MTLS == nil {
+				req.MTLS = &environmentMTLSPayload{}
+			}
+			req.MTLS.Clear = true
+		}
+		if clearPassword, ok := r.MultipartForm.Value["mtlsClearPrivateKeyPassword"]; ok && len(clearPassword) > 0 && clearPassword[0] == "true" {
+			if req.MTLS == nil {
+				req.MTLS = &environmentMTLSPayload{}
+			}
+			req.MTLS.ClearPrivateKeyPassword = true
+		}
+		certFile, certHeader, certErr := r.FormFile("mtlsCertificate")
+		if certErr == nil {
+			_ = certFile.Close()
+			req.CertificateFile = certHeader
+		}
+		keyFile, keyHeader, keyErr := r.FormFile("mtlsPrivateKey")
+		if keyErr == nil {
+			_ = keyFile.Close()
+			req.PrivateKeyFile = keyHeader
+		}
+		return req, nil
+	}
+
+	var req environmentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req.environmentPayload); err != nil {
+		return nil, err
+	}
+	return &req, nil
+}
+
 func (h *Handler) ListEnvironments(w http.ResponseWriter, r *http.Request) {
 	envs, err := h.storage.ListEnvironments()
 	if err != nil {
@@ -734,27 +835,28 @@ func (h *Handler) ListEnvironments(w http.ResponseWriter, r *http.Request) {
 	if envs == nil {
 		envs = []*storage.Environment{}
 	}
-	respondJSON(w, http.StatusOK, envs)
+	response := make([]*storage.Environment, 0, len(envs))
+	for _, env := range envs {
+		response = append(response, sanitizeEnvironmentResponse(env))
+	}
+	respondJSON(w, http.StatusOK, response)
 }
 
 func (h *Handler) CreateEnvironment(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Name        string            `json:"name"`
-		Description string            `json:"description"`
-		Properties  map[string]string `json:"properties"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	req, err := parseEnvironmentRequest(r)
+	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if body.Name == "" {
+	if strings.TrimSpace(req.Name) == "" {
 		respondError(w, http.StatusBadRequest, "name is required")
 		return
 	}
 	env := &storage.Environment{
-		Name:        body.Name,
-		Description: body.Description,
-		Properties:  body.Properties,
+		Name:        strings.TrimSpace(req.Name),
+		Description: req.Description,
+		HTTPProxy:   req.HTTPProxy,
+		Properties:  req.Properties,
 	}
 	if env.Properties == nil {
 		env.Properties = map[string]string{}
@@ -763,7 +865,36 @@ func (h *Handler) CreateEnvironment(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	respondJSON(w, http.StatusCreated, env)
+	hasMTLSUpload := req.CertificateFile != nil || req.PrivateKeyFile != nil
+	if hasMTLSUpload || req.MTLS != nil {
+		if req.MTLS != nil && req.MTLS.Clear {
+			_ = h.storage.DeleteEnvironment(env.ID)
+			respondError(w, http.StatusBadRequest, "cannot clear mTLS while creating an environment")
+			return
+		}
+		if req.CertificateFile == nil || req.PrivateKeyFile == nil {
+			_ = h.storage.DeleteEnvironment(env.ID)
+			respondError(w, http.StatusBadRequest, "both mTLS certificate and private key files are required")
+			return
+		}
+		mtls, err := h.storage.SaveEnvironmentMTLSFiles(env.ID, req.CertificateFile, req.PrivateKeyFile)
+		if err != nil {
+			_ = h.storage.DeleteEnvironment(env.ID)
+			respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if req.MTLS != nil {
+			mtls.PrivateKeyPassword = req.MTLS.PrivateKeyPassword
+			mtls.HasPrivateKeyPassword = req.MTLS.PrivateKeyPassword != ""
+		}
+		env.MTLS = mtls
+		if err := h.storage.UpdateEnvironment(env); err != nil {
+			_ = h.storage.DeleteEnvironment(env.ID)
+			respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	respondJSON(w, http.StatusCreated, sanitizeEnvironmentResponse(env))
 }
 
 func (h *Handler) GetEnvironment(w http.ResponseWriter, r *http.Request) {
@@ -773,7 +904,7 @@ func (h *Handler) GetEnvironment(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusNotFound, "environment not found")
 		return
 	}
-	respondJSON(w, http.StatusOK, env)
+	respondJSON(w, http.StatusOK, sanitizeEnvironmentResponse(env))
 }
 
 func (h *Handler) UpdateEnvironment(w http.ResponseWriter, r *http.Request) {
@@ -783,27 +914,68 @@ func (h *Handler) UpdateEnvironment(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusNotFound, "environment not found")
 		return
 	}
-	var body struct {
-		Name        string            `json:"name"`
-		Description string            `json:"description"`
-		Properties  map[string]string `json:"properties"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	req, err := parseEnvironmentRequest(r)
+	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if body.Name != "" {
-		env.Name = body.Name
+	if strings.TrimSpace(req.Name) != "" {
+		env.Name = strings.TrimSpace(req.Name)
 	}
-	env.Description = body.Description
-	if body.Properties != nil {
-		env.Properties = body.Properties
+	env.Description = req.Description
+	env.HTTPProxy = req.HTTPProxy
+	if req.Properties != nil {
+		env.Properties = req.Properties
+	}
+	hasMTLSUpload := req.CertificateFile != nil || req.PrivateKeyFile != nil
+	switch {
+	case req.MTLS != nil && req.MTLS.Clear:
+		if err := h.storage.ClearEnvironmentMTLSFiles(env.ID); err != nil {
+			respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		env.MTLS = nil
+	case hasMTLSUpload:
+		if req.CertificateFile == nil || req.PrivateKeyFile == nil {
+			respondError(w, http.StatusBadRequest, "both mTLS certificate and private key files are required")
+			return
+		}
+		mtls, err := h.storage.SaveEnvironmentMTLSFiles(env.ID, req.CertificateFile, req.PrivateKeyFile)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if env.MTLS != nil {
+			mtls.PrivateKeyPassword = env.MTLS.PrivateKeyPassword
+		}
+		if req.MTLS != nil {
+			if req.MTLS.PrivateKeyPassword != "" {
+				mtls.PrivateKeyPassword = req.MTLS.PrivateKeyPassword
+			}
+			if req.MTLS.ClearPrivateKeyPassword {
+				mtls.PrivateKeyPassword = ""
+			}
+		}
+		mtls.HasPrivateKeyPassword = mtls.PrivateKeyPassword != ""
+		env.MTLS = mtls
+	case req.MTLS != nil:
+		if env.MTLS == nil {
+			respondError(w, http.StatusBadRequest, "upload mTLS certificate and private key files before configuring mTLS settings")
+			return
+		}
+		if req.MTLS.PrivateKeyPassword != "" {
+			env.MTLS.PrivateKeyPassword = req.MTLS.PrivateKeyPassword
+		}
+		if req.MTLS.ClearPrivateKeyPassword {
+			env.MTLS.PrivateKeyPassword = ""
+		}
+		env.MTLS.HasPrivateKeyPassword = env.MTLS.PrivateKeyPassword != ""
 	}
 	if err := h.storage.UpdateEnvironment(env); err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	respondJSON(w, http.StatusOK, env)
+	respondJSON(w, http.StatusOK, sanitizeEnvironmentResponse(env))
 }
 
 func (h *Handler) DeleteEnvironment(w http.ResponseWriter, r *http.Request) {

@@ -1,4 +1,4 @@
-import type { AppConfig, DashboardStats, Environment, ExampleResponse, GitStatusResult, HealthResponse, KarateVersion, MetaResponse, Project, QueueItem, Test, TestResult } from '../types'
+import type { AppConfig, DashboardStats, Environment, EnvironmentDraft, ExampleResponse, GitStatusResult, HealthResponse, KarateVersion, MetaResponse, Project, QueueItem, Test, TestResult } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
@@ -163,18 +163,30 @@ export const statsApi = {
 export const environmentApi = {
   list: async () => handleResponse<Environment[]>(await fetch(`${API_BASE}/environments`)),
   get: async (id: string) => handleResponse<Environment>(await fetch(`${API_BASE}/environments/${id}`)),
-  create: async (env: Omit<Environment, 'id' | 'createdAt' | 'updatedAt'>) =>
+  create: async (env: EnvironmentDraft, files?: { certificate?: File | null; privateKey?: File | null }) =>
     handleResponse<Environment>(await fetch(`${API_BASE}/environments`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(env),
+      body: buildEnvironmentFormData(env, files),
     })),
-  update: async (id: string, env: Partial<Omit<Environment, 'id' | 'createdAt' | 'updatedAt'>>) =>
+  update: async (id: string, env: Partial<EnvironmentDraft>, files?: { certificate?: File | null; privateKey?: File | null }) =>
     handleResponse<Environment>(await fetch(`${API_BASE}/environments/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(env),
+      body: buildEnvironmentFormData(env, files),
     })),
   delete: async (id: string) =>
     handleResponse<void>(await fetch(`${API_BASE}/environments/${id}`, { method: 'DELETE' })),
+}
+
+function buildEnvironmentFormData(env: Partial<EnvironmentDraft>, files?: { certificate?: File | null; privateKey?: File | null }) {
+  const formData = new FormData()
+  if (env.name !== undefined) formData.set('name', env.name)
+  if (env.description !== undefined) formData.set('description', env.description)
+  if (env.httpProxy !== undefined) formData.set('httpProxy', env.httpProxy)
+  if (env.properties !== undefined) formData.set('properties', JSON.stringify(env.properties))
+  if (env.mtls?.privateKeyPassword !== undefined) formData.set('mtlsPrivateKeyPassword', env.mtls.privateKeyPassword)
+  if (env.mtls?.clear) formData.set('mtlsClear', 'true')
+  if (env.mtls?.clearPrivateKeyPassword) formData.set('mtlsClearPrivateKeyPassword', 'true')
+  if (files?.certificate) formData.set('mtlsCertificate', files.certificate)
+  if (files?.privateKey) formData.set('mtlsPrivateKey', files.privateKey)
+  return formData
 }

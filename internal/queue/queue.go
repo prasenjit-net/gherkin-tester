@@ -1,9 +1,9 @@
 package queue
 
 import (
-	"sort"
 	"fmt"
 	"log/slog"
+	"sort"
 	"sync"
 	"time"
 
@@ -230,18 +230,17 @@ func (q *Queue) processOne() bool {
 	var result *storage.TestResult
 	var execErr error
 	if fetchErr == nil {
-		// Load environment properties (nil-safe — empty map if no env set).
-		envProps := map[string]string{}
+		var env *storage.Environment
 		if item.EnvironmentID != "" {
-			if env, err := q.st.GetEnvironment(item.EnvironmentID); err == nil {
-				envProps = env.Properties
+			if storedEnv, err := q.st.GetEnvironment(item.EnvironmentID); err == nil {
+				env = storedEnv
 			} else {
-				q.log.Warn("queue: environment not found, running without env props",
+				q.log.Warn("queue: environment not found, running without environment settings",
 					"environmentID", item.EnvironmentID, "error", err)
 			}
 		}
 		exec := q.resolveExecutor(item.ProjectID)
-		result, execErr = exec.Execute("", test, envProps, item.Tags)
+		result, execErr = exec.Execute("", test, env, item.Tags)
 	}
 
 	q.mu.Lock()

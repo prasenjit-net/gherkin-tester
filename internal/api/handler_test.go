@@ -5,10 +5,12 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/prasenjit-net/gherkin-tester/internal/config"
+	"github.com/prasenjit-net/gherkin-tester/internal/events"
 	"github.com/prasenjit-net/gherkin-tester/internal/queue"
 	"github.com/prasenjit-net/gherkin-tester/internal/storage"
 	"github.com/prasenjit-net/gherkin-tester/internal/testclient"
@@ -17,14 +19,14 @@ import (
 
 func TestHealthEndpoint(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	st, err := storage.New("./data", logger)
+	st, err := storage.New(filepath.Join(t.TempDir(), "data"), logger)
 	if err != nil {
 		t.Fatalf("failed to create storage: %v", err)
 	}
-	
+
 	executor := &testclient.MockExecutor{}
 	var q *queue.Queue // nil is OK — health endpoint doesn't use queue
-	router := NewRouter(config.Default(), logger, version.Current(), st, executor, q)
+	router := NewRouter(config.Default(), "", logger, version.Current(), st, executor, q, events.New())
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	res := httptest.NewRecorder()
 

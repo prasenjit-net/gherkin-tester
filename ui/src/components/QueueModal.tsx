@@ -71,19 +71,36 @@ export default function QueueModal({ test, onClose, onQueued }: Props) {
                   ))}
                 </select>
               )}
-              {selectedEnvId && (() => {
-                const env = environments.find(e => e.id === selectedEnvId)
-                if (!env || Object.keys(env.properties).length === 0) return null
-                return (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {Object.entries(env.properties).map(([k, v]) => (
-                      <span key={k} className="px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs font-mono">
-                        {k}={v}
-                      </span>
-                    ))}
-                  </div>
-                )
-              })()}
+               {selectedEnvId && (() => {
+                 const env = environments.find(e => e.id === selectedEnvId)
+                 if (!env) return null
+                 const hasProperties = Object.keys(env.properties).length > 0
+                 if (!hasProperties && !env.httpProxy && !env.mtls) return null
+                 return (
+                    <div className="mt-2 space-y-2">
+                      {env.httpProxy && (
+                        <div className="rounded bg-purple-50 px-2 py-1 text-xs text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                          Proxy: {env.httpProxy}
+                        </div>
+                      )}
+                      {env.mtls && (
+                        <div className="rounded bg-emerald-50 px-2 py-1 text-xs text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                          mTLS: {env.mtls.certificateFileName} + {env.mtls.privateKeyFileName}
+                          {env.mtls.hasPrivateKeyPassword ? ' (password stored)' : ''}
+                        </div>
+                      )}
+                      {hasProperties && (
+                        <div className="flex flex-wrap gap-1">
+                         {Object.entries(env.properties).map(([k, v]) => (
+                           <span key={k} className="px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs font-mono">
+                             {k}={v}
+                           </span>
+                         ))}
+                       </div>
+                     )}
+                   </div>
+                 )
+               })()}
             </div>
 
             <div>

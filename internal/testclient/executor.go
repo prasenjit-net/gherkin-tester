@@ -17,8 +17,8 @@ import (
 // MockExecutor returns hardcoded passed results without running anything.
 type MockExecutor struct{}
 
-func (m *MockExecutor) Execute(testPath string, testFeature *storage.Test, env map[string]string, tags []string) (*storage.TestResult, error) {
-	karateConfig, _ := RenderKarateConfig(env)
+func (m *MockExecutor) Execute(testPath string, testFeature *storage.Test, env *storage.Environment, tags []string) (*storage.TestResult, error) {
+	karateConfig, _ := RenderKarateConfigSnapshot(env)
 	result := &storage.TestResult{
 		TestID:       testFeature.ID,
 		Status:       "passed",
@@ -57,7 +57,13 @@ var (
 	reElapsed          = regexp.MustCompile(`elapsed:\s+([\d.]+)s`)
 )
 
-func (k *KarateExecutor) Execute(testPath string, testFeature *storage.Test, env map[string]string, tags []string) (*storage.TestResult, error) {
+func (k *KarateExecutor) Execute(testPath string, testFeature *storage.Test, env *storage.Environment, tags []string) (*storage.TestResult, error) {
+	if env == nil {
+		env = &storage.Environment{}
+	}
+	if env.Properties == nil {
+		env.Properties = map[string]string{}
+	}
 	// Write the feature file to a temp working directory so Karate can find it.
 	workDir, err := os.MkdirTemp("", "karate-run-*")
 	if err != nil {
@@ -83,8 +89,8 @@ func (k *KarateExecutor) Execute(testPath string, testFeature *storage.Test, env
 
 	// Build java args: JVM -D flags, then -jar, then feature path, then --tags.
 	javaArgs := []string{}
-	for k, v := range env {
-		javaArgs = append(javaArgs, fmt.Sprintf("-D%s=%s", k, v))
+	for key, value := range env.Properties {
+		javaArgs = append(javaArgs, fmt.Sprintf("-D%s=%s", key, value))
 	}
 	javaArgs = append(javaArgs, "-jar", k.jarPath, featurePath)
 	if len(tags) > 0 {
@@ -108,12 +114,16 @@ func (k *KarateExecutor) Execute(testPath string, testFeature *storage.Test, env
 	output := string(out)
 	// Strip ANSI color codes before parsing
 	cleanOutput := reANSI.ReplaceAllString(output, "")
+	snapshotConfig, err := RenderKarateConfigSnapshot(env)
+	if err != nil {
+		return nil, fmt.Errorf("render karate-config.js snapshot: %w", err)
+	}
 
 	duration := endedAt.Sub(startedAt).Milliseconds()
 	result := &storage.TestResult{
 		TestID:       testFeature.ID,
 		Output:       cleanOutput,
-		KarateConfig: karateConfig,
+		KarateConfig: snapshotConfig,
 		StartedAt:    startedAt,
 		EndedAt:      endedAt,
 		Duration:     duration,

@@ -25,22 +25,22 @@ type Test struct {
 }
 
 type TestResult struct {
-	ID            string            `json:"id"`
-	TestID        string            `json:"testId"`
-	ProjectID     string            `json:"projectId"`
-	TestName      string            `json:"testName,omitempty"`
-	EnvironmentID string            `json:"environmentId,omitempty"`
-	Tags          []string          `json:"tags,omitempty"`
-	KarateConfig  string            `json:"karateConfig,omitempty"`
-	Status        string            `json:"status"` // passed, failed, error
-	Duration      int64             `json:"duration"` // milliseconds
-	Message       string            `json:"message"`
-	Output        string            `json:"output,omitempty"`
-	StartedAt     time.Time         `json:"startedAt"`
-	EndedAt       time.Time         `json:"endedAt"`
-	Scenarios     int               `json:"scenarios"`
-	Passed        int               `json:"passed"`
-	Failed        int               `json:"failed"`
+	ID            string    `json:"id"`
+	TestID        string    `json:"testId"`
+	ProjectID     string    `json:"projectId"`
+	TestName      string    `json:"testName,omitempty"`
+	EnvironmentID string    `json:"environmentId,omitempty"`
+	Tags          []string  `json:"tags,omitempty"`
+	KarateConfig  string    `json:"karateConfig,omitempty"`
+	Status        string    `json:"status"`   // passed, failed, error
+	Duration      int64     `json:"duration"` // milliseconds
+	Message       string    `json:"message"`
+	Output        string    `json:"output,omitempty"`
+	StartedAt     time.Time `json:"startedAt"`
+	EndedAt       time.Time `json:"endedAt"`
+	Scenarios     int       `json:"scenarios"`
+	Passed        int       `json:"passed"`
+	Failed        int       `json:"failed"`
 }
 
 // KarateVersion represents a configured Karate JAR version.
@@ -49,14 +49,24 @@ type KarateVersion struct {
 	AddedAt time.Time `json:"addedAt"`
 }
 
+type EnvironmentMTLS struct {
+	CertificateFileName   string `json:"certificateFileName,omitempty"`
+	PrivateKeyFileName    string `json:"privateKeyFileName,omitempty"`
+	PrivateKeyPassword    string `json:"privateKeyPassword,omitempty"`
+	HasPrivateKeyPassword bool   `json:"hasPrivateKeyPassword,omitempty"`
+	CertificatePath       string `json:"-"`
+	PrivateKeyPath        string `json:"-"`
+}
+
 // Environment is a named collection of key-value properties used to
 // parameterise test executions (e.g. "dev", "uat", "prod").
 type Environment struct {
 	ID          string            `json:"id"`
 	Name        string            `json:"name"`
 	Description string            `json:"description,omitempty"`
+	HTTPProxy   string            `json:"httpProxy,omitempty"`
+	MTLS        *EnvironmentMTLS  `json:"mtls,omitempty"`
 	Properties  map[string]string `json:"properties"`
 	CreatedAt   time.Time         `json:"createdAt"`
 	UpdatedAt   time.Time         `json:"updatedAt"`
 }
-

@@ -1,311 +1,181 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { Globe, Pencil, Plus, Trash2 } from 'lucide-react'
+import { useToast } from '../components/Toast'
 import { environmentApi } from '../services/api'
 import type { Environment } from '../types'
-import { useToast } from '../components/Toast'
-
-interface PropertyRow {
-  key: string
-  value: string
-}
-
-interface EnvFormState {
-  name: string
-  description: string
-  rows: PropertyRow[]
-}
-
-const emptyForm = (): EnvFormState => ({
-  name: '',
-  description: '',
-  rows: [{ key: '', value: '' }],
-})
-
-const envToForm = (env: Environment): EnvFormState => ({
-  name: env.name,
-  description: env.description ?? '',
-  rows: Object.entries(env.properties).map(([key, value]) => ({ key, value })).concat({ key: '', value: '' }),
-})
 
 export default function EnvironmentsPage() {
   const [environments, setEnvironments] = useState<Environment[]>([])
   const [loading, setLoading] = useState(true)
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState<EnvFormState>(emptyForm())
-  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const { toast } = useToast()
 
   const load = async () => {
     try {
-      const list = await environmentApi.list()
-      setEnvironments(list)
+      setLoading(true)
+      setError(null)
+      setEnvironments(await environmentApi.list())
     } catch (e) {
-      toast(`Failed to load environments: ${e}`, 'error')
+      setError(e instanceof Error ? e.message : 'Failed to load environments')
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { load() }, [])
-
-  const openCreate = () => {
-    setEditingId(null)
-    setForm(emptyForm())
-    setModalOpen(true)
-  }
-
-  const openEdit = (env: Environment) => {
-    setEditingId(env.id)
-    setForm(envToForm(env))
-    setModalOpen(true)
-  }
-
-  const closeModal = () => {
-    setModalOpen(false)
-    setEditingId(null)
-  }
-
-  const setRow = (idx: number, field: 'key' | 'value', val: string) => {
-    setForm(f => {
-      const rows = [...f.rows]
-      rows[idx] = { ...rows[idx], [field]: val }
-      // auto-add new row when last row gets a key
-      if (idx === rows.length - 1 && val && field === 'key') {
-        rows.push({ key: '', value: '' })
-      }
-      return { ...f, rows }
-    })
-  }
-
-  const removeRow = (idx: number) => {
-    setForm(f => ({
-      ...f,
-      rows: f.rows.filter((_, i) => i !== idx),
-    }))
-  }
-
-  const buildProperties = (): Record<string, string> => {
-    const props: Record<string, string> = {}
-    for (const { key, value } of form.rows) {
-      if (key.trim()) props[key.trim()] = value
-    }
-    return props
-  }
-
-  const handleSave = async () => {
-    if (!form.name.trim()) {
-      toast('Environment name is required', 'error')
-      return
-    }
-    setSaving(true)
-    try {
-      const payload = {
-        name: form.name.trim(),
-        description: form.description,
-        properties: buildProperties(),
-      }
-      if (editingId) {
-        await environmentApi.update(editingId, payload)
-        toast('Environment updated')
-      } else {
-        await environmentApi.create(payload)
-        toast('Environment created')
-      }
-      closeModal()
-      load()
-    } catch (e) {
-      toast(`Save failed: ${e}`, 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
+  useEffect(() => {
+    void load()
+  }, [])
 
   const handleDelete = async (id: string) => {
     try {
       await environmentApi.delete(id)
       toast('Environment deleted')
       setDeleteConfirmId(null)
-      load()
+      await load()
     } catch (e) {
-      toast(`Delete failed: ${e}`, 'error')
+      toast(e instanceof Error ? e.message : 'Delete failed', 'error')
     }
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Environments</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Named property sets injected into test executions
-          </p>
+    <div className="space-y-8 p-8">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <Globe className="h-7 w-7 text-indigo-600 dark:text-indigo-400" />
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Environments</h1>
+            <p className="text-sm text-gray-500 dark:text-slate-400">
+              Named property sets and optional HTTP proxies for queued executions
+            </p>
+          </div>
         </div>
-        <button
-          onClick={openCreate}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+        <Link
+          to="/environments/new"
+          className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700"
         >
-          + New Environment
-        </button>
+          <Plus className="h-4 w-4" />
+          New Environment
+        </Link>
       </div>
 
-      {loading ? (
-        <div className="text-center py-12 text-gray-500 dark:text-gray-400">Loading…</div>
-      ) : environments.length === 0 ? (
-        <div className="text-center py-12 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl">
-          <p className="text-gray-500 dark:text-gray-400 mb-2">No environments yet</p>
-          <button onClick={openCreate} className="text-blue-600 hover:underline text-sm">
-            Create your first environment
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {environments.map(env => (
-            <div key={env.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 dark:text-white text-lg">{env.name}</h3>
-                  {env.description && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{env.description}</p>
-                  )}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {Object.entries(env.properties).length === 0 ? (
-                      <span className="text-xs text-gray-400 dark:text-gray-500 italic">No properties</span>
-                    ) : (
-                      Object.entries(env.properties).map(([k, v]) => (
-                        <span key={k} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono text-gray-700 dark:text-gray-300">
-                          <span className="font-semibold">{k}</span>
-                          <span className="text-gray-400">=</span>
-                          <span>{v}</span>
-                        </span>
-                      ))
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 ml-4 shrink-0">
-                  <button
-                    onClick={() => openEdit(env)}
-                    className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
-                  >
-                    Edit
-                  </button>
-                  {deleteConfirmId === env.id ? (
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs text-red-600 dark:text-red-400">Confirm?</span>
-                      <button
-                        onClick={() => handleDelete(env.id)}
-                        className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
-                      >
-                        Yes
-                      </button>
-                      <button
-                        onClick={() => setDeleteConfirmId(null)}
-                        className="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded"
-                      >
-                        No
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setDeleteConfirmId(env.id)}
-                      className="px-3 py-1.5 text-sm bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50"
-                    >
-                      Delete
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300">
+          {error}
         </div>
       )}
 
-      {/* Create / Edit Modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                {editingId ? 'Edit Environment' : 'New Environment'}
-              </h2>
+      {loading ? (
+        <p className="py-8 text-center text-sm text-gray-500 dark:text-slate-400">Loading environments…</p>
+      ) : environments.length === 0 ? (
+        <div className="rounded-xl border border-gray-200 bg-white py-16 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <Globe className="mx-auto mb-3 h-12 w-12 text-gray-200 dark:text-slate-700" />
+          <p className="text-sm text-gray-500 dark:text-slate-400">
+            Create an environment to inject properties and an optional proxy into test executions.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {environments.map((env) => {
+            const propertyCount = Object.keys(env.properties).length
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name *</label>
-                  <input
-                    type="text"
-                    value={form.name}
-                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                    placeholder="e.g. dev, uat, prod"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
-                  <input
-                    type="text"
-                    value={form.description}
-                    onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                    placeholder="Optional description"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Properties</label>
-                  <div className="space-y-2">
-                    {form.rows.map((row, idx) => (
-                      <div key={idx} className="flex gap-2 items-center">
-                        <input
-                          type="text"
-                          value={row.key}
-                          onChange={e => setRow(idx, 'key', e.target.value)}
-                          placeholder="key"
-                          className="flex-1 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm font-mono focus:ring-1 focus:ring-blue-500 outline-none"
-                        />
-                        <span className="text-gray-400 text-sm">=</span>
-                        <input
-                          type="text"
-                          value={row.value}
-                          onChange={e => setRow(idx, 'value', e.target.value)}
-                          placeholder="value"
-                          className="flex-1 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm font-mono focus:ring-1 focus:ring-blue-500 outline-none"
-                        />
-                        {idx < form.rows.length - 1 && (
-                          <button
-                            onClick={() => removeRow(idx)}
-                            className="text-red-400 hover:text-red-600 text-lg leading-none px-1"
-                            title="Remove"
-                          >
-                            ×
-                          </button>
+            return (
+              <div
+                key={env.id}
+                className="group overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+              >
+                <div className="flex items-start gap-4 p-4">
+                  <Globe className="mt-0.5 h-6 w-6 shrink-0 text-indigo-500 dark:text-indigo-400" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="truncate text-base font-semibold text-gray-900 dark:text-slate-100">{env.name}</h3>
+                      {env.httpProxy && (
+                        <span className="rounded-full bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/20 dark:text-purple-300">
+                          Proxy enabled
+                        </span>
+                      )}
+                      {env.mtls && (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
+                          mTLS enabled
+                        </span>
+                      )}
+                    </div>
+                    {env.description && (
+                      <p className="mt-0.5 truncate text-sm text-gray-500 dark:text-slate-400">{env.description}</p>
+                    )}
+                    <div className="mt-2 flex flex-wrap gap-4 text-xs text-gray-400 dark:text-slate-500">
+                      <span>{propertyCount} {propertyCount === 1 ? 'property' : 'properties'}</span>
+                      <span>{env.httpProxy ? 'Proxy configured' : 'No proxy'}</span>
+                      <span>{env.mtls ? 'Client cert configured' : 'No mTLS'}</span>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {env.httpProxy && (
+                        <div className="rounded-lg border border-purple-100 bg-purple-50/70 px-3 py-2 text-xs text-purple-700 dark:border-purple-900/40 dark:bg-purple-900/10 dark:text-purple-300">
+                          <span className="font-semibold">HTTP proxy:</span> {env.httpProxy}
+                        </div>
+                      )}
+                      {env.mtls && (
+                        <div className="rounded-lg border border-emerald-100 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/10 dark:text-emerald-300">
+                          <span className="font-semibold">mTLS:</span> {env.mtls.certificateFileName} + {env.mtls.privateKeyFileName}
+                          {env.mtls.hasPrivateKeyPassword ? ' (password stored)' : ''}
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-1.5">
+                        {propertyCount === 0 ? (
+                          <span className="text-xs italic text-gray-400 dark:text-slate-500">No properties</span>
+                        ) : (
+                          Object.entries(env.properties).map(([key, value]) => (
+                            <span
+                              key={key}
+                              className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-mono text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
+                            >
+                              <span className="font-semibold">{key}</span>
+                              <span className="opacity-50">=</span>
+                              <span>{value}</span>
+                            </span>
+                          ))
                         )}
                       </div>
-                    ))}
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                    Properties are passed as <code>-Dkey=value</code> JVM flags and via <code>karate-config.js</code>
-                  </p>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Link
+                      to={`/environments/${env.id}/edit`}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                    >
+                      <Pencil className="h-3.5 w-3.5" /> Edit
+                    </Link>
+                    {deleteConfirmId === env.id ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-red-600 dark:text-red-400">Delete?</span>
+                        <button
+                          onClick={() => void handleDelete(env.id)}
+                          className="rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+                        >
+                          Yes
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirmId(null)}
+                          className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                        >
+                          No
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setDeleteConfirmId(env.id)}
+                        className="rounded-lg border border-red-200 p-1.5 text-red-500 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                        title="Delete environment"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  onClick={closeModal}
-                  className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {saving ? 'Saving…' : editingId ? 'Save Changes' : 'Create'}
-                </button>
-              </div>
-            </div>
-          </div>
+            )
+          })}
         </div>
       )}
     </div>
